@@ -1,0 +1,86 @@
+name: Build Mobile Apps
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_name:
+        description: 'Nome dell''App'
+        required: true
+        default: 'WebToApp'
+      app_id:
+        description: 'Package ID (es. com.example.app)'
+        required: true
+        default: 'com.webtoapp.starter'
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          
+      - name: Install Dependencies
+        run: npm install
+        
+      - name: Build Web Project
+        run: npm run build
+        
+      - name: Capacitor Sync
+        run: |
+          npx cap add android
+          npx cap sync android
+          
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+          
+      - name: Build Android APK
+        run: |
+          cd android
+          ./gradlew assembleRelease
+          
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-apk
+          path: android/app/build/outputs/apk/release/app-release-unsigned.apk
+
+  build-ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          
+      - name: Install Dependencies
+        run: npm install
+        
+      - name: Build Web Project
+        run: npm run build
+        
+      - name: Capacitor Sync
+        run: |
+          npx cap add ios
+          npx cap sync ios
+          
+      - name: Build iOS App
+        run: |
+          cd ios/App
+          xcodebuild -workspace App.xcworkspace -scheme App -sdk iphoneos -configuration Release -archivePath App.xcarchive archive
+          # Nota: Per generare un IPA serve un certificato di distribuzione Apple.
+          # Questo passaggio genera l'archivio compilato.
+          
+      - name: Upload Archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-archive
+          path: ios/App/App.xcarchive
