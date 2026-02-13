@@ -3,7 +3,7 @@ import { Octokit } from 'octokit';
 
 export async function POST(req: NextRequest) {
   try {
-    const { token, repo, appName, appId } = await req.json();
+    const { token, repo, appName, appId, url } = await req.json();
 
     if (!token || !repo) {
       return NextResponse.json({ error: 'Missing token or repo' }, { status: 400 });
@@ -20,7 +20,8 @@ export async function POST(req: NextRequest) {
       ref: 'main',
       inputs: {
         app_name: appName,
-        app_id: appId
+        app_id: appId,
+        web_url: url
       },
       headers: {
         'X-GitHub-Api-Version': '2022-11-28'

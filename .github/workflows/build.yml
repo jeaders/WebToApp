@@ -11,6 +11,10 @@ on:
         description: 'Package ID (es. com.example.app)'
         required: true
         default: 'com.webtoapp.starter'
+      web_url:
+        description: 'URL del sito da convertire'
+        required: true
+        default: 'https://google.com'
 
 jobs:
   build-android:
@@ -29,6 +33,11 @@ jobs:
       - name: Build Web Project
         run: npm run build
         
+      - name: Create Web Assets Directory
+        run: |
+          mkdir -p www
+          echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><script>window.location.href = "${{ github.event.inputs.web_url }}";</script></head><body style="background: #000;"></body></html>' > www/index.html
+          
       - name: Capacitor Sync
         run: |
           npx cap init "${{ github.event.inputs.app_name }}" "${{ github.event.inputs.app_id }}" --web-dir www

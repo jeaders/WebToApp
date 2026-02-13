@@ -19,6 +19,8 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<'upload' | 'preview' | 'settings' | 'logs' | 'download'>('upload');
   const [previewScale, setPreviewScale] = useState(100);
   const [previewDevice, setPreviewDevice] = useState<'iphone' | 'android'>('iphone');
+  const [viewportWidth, setViewportWidth] = useState(375);
+  const [viewportHeight, setViewportHeight] = useState(667);
   const [isBuilding, setIsBuilding] = useState(false);
   const [buildProgress, setBuildProgress] = useState(0);
   const [appName, setAppName] = useState('Mia Fantastica App');
@@ -319,33 +321,78 @@ export default function Dashboard() {
           )}
 
           {activeTab === 'preview' && (
-            <div className="flex flex-col items-center animate-in fade-in zoom-in-95 duration-500">
-              {/* Device Selector & Controls */}
-              <div className="flex items-center gap-4 mb-8 bg-white p-2 rounded-2xl border border-gray-100 shadow-sm">
-                <button 
-                  onClick={() => setPreviewDevice('iphone')}
-                  className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${previewDevice === 'iphone' ? 'bg-black text-white' : 'hover:bg-gray-50'}`}
-                >
-                  iPhone 15
-                </button>
-                <button 
-                  onClick={() => setPreviewDevice('android')}
-                  className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${previewDevice === 'android' ? 'bg-black text-white' : 'hover:bg-gray-50'}`}
-                >
-                  Pixel 8
-                </button>
-                <div className="w-px h-6 bg-gray-200 mx-2" />
-                <div className="flex items-center gap-2 px-2">
-                  <span className="text-xs font-bold text-gray-400">Zoom</span>
-                  <input 
-                    type="range" 
-                    min="50" 
-                    max="150" 
-                    value={previewScale} 
-                    onChange={(e) => setPreviewScale(parseInt(e.target.value))}
-                    className="w-24 accent-black"
-                  />
-                  <span className="text-xs font-mono text-gray-500 w-8">{previewScale}%</span>
+            <div className="flex flex-col items-center animate-in fade-in zoom-in-95 duration-500 pb-20">
+              {/* Sticky Controls Container */}
+              <div className="sticky top-4 z-50 w-full max-w-2xl space-y-4 mb-12">
+                {/* Device Selector & Zoom */}
+                <div className="flex items-center justify-between bg-white/80 backdrop-blur-md p-3 rounded-2xl border border-gray-100 shadow-lg">
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => { setPreviewDevice('iphone'); setViewportWidth(375); setViewportHeight(667); }}
+                      className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${previewDevice === 'iphone' ? 'bg-black text-white' : 'hover:bg-gray-50'}`}
+                    >
+                      iPhone
+                    </button>
+                    <button 
+                      onClick={() => { setPreviewDevice('android'); setViewportWidth(360); setViewportHeight(740); }}
+                      className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${previewDevice === 'android' ? 'bg-black text-white' : 'hover:bg-gray-50'}`}
+                    >
+                      Android
+                    </button>
+                  </div>
+                  
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-black text-gray-400 uppercase">Zoom Vista</span>
+                      <input 
+                        type="range" 
+                        min="30" 
+                        max="100" 
+                        value={previewScale} 
+                        onChange={(e) => setPreviewScale(parseInt(e.target.value))}
+                        className="w-24 accent-black"
+                      />
+                      <span className="text-xs font-mono text-gray-500 w-8">{previewScale}%</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Resolution Controls */}
+                <div className="bg-white/80 backdrop-blur-md p-4 rounded-2xl border border-gray-100 shadow-lg grid grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Larghezza (Viewport)</label>
+                      <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md">{viewportWidth}px</span>
+                    </div>
+                    <input 
+                      type="range" 
+                      min="320" 
+                      max="1024" 
+                      value={viewportWidth} 
+                      onChange={(e) => setViewportWidth(parseInt(e.target.value))}
+                      className="w-full accent-primary"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Altezza (Viewport)</label>
+                      <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md">{viewportHeight}px</span>
+                    </div>
+                    <input 
+                      type="range" 
+                      min="480" 
+                      max="1366" 
+                      value={viewportHeight} 
+                      onChange={(e) => setViewportHeight(parseInt(e.target.value))}
+                      className="w-full accent-primary"
+                    />
+                  </div>
+                </div>
+                
+                <div className="text-center">
+                  <p className="text-[10px] text-gray-400 font-medium">
+                    💡 <b>Info:</b> Questa è la risoluzione logica (viewport). Un iPhone 15 Pro ha 393px di larghezza logica, ma 1179px fisici (Retina 3x).
+                  </p>
                 </div>
               </div>
 
@@ -356,7 +403,10 @@ export default function Dashboard() {
               >
                 {previewDevice === 'iphone' ? (
                   /* iPhone 15 Pro Frame */
-                  <div className="w-[300px] h-[600px] bg-black rounded-[55px] p-3 shadow-2xl border-[6px] border-[#1f1f1f] relative overflow-hidden">
+                  <div 
+                    style={{ width: viewportWidth + 24, height: viewportHeight + 60 }}
+                    className="bg-black rounded-[55px] p-3 shadow-2xl border-[6px] border-[#1f1f1f] relative overflow-hidden transition-all duration-300"
+                  >
                     {/* Dynamic Island */}
                     <div className="absolute top-6 left-1/2 -translate-x-1/2 w-24 h-6 bg-black rounded-full z-20" />
                     
@@ -376,7 +426,10 @@ export default function Dashboard() {
                   </div>
                 ) : (
                   /* Android Pixel 8 Frame */
-                  <div className="w-[300px] h-[610px] bg-black rounded-[40px] p-2 shadow-2xl border-[4px] border-[#2a2a2a] relative overflow-hidden">
+                  <div 
+                    style={{ width: viewportWidth + 16, height: viewportHeight + 20 }}
+                    className="bg-black rounded-[40px] p-2 shadow-2xl border-[4px] border-[#2a2a2a] relative overflow-hidden transition-all duration-300"
+                  >
                     {/* Camera Hole */}
                     <div className="absolute top-4 left-1/2 -translate-x-1/2 w-3 h-3 bg-[#1a1a1a] rounded-full z-20" />
                     
