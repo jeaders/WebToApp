@@ -16,7 +16,9 @@ import {
 } from 'lucide-react';
 
 export default function Dashboard() {
-  const [activeTab, setActiveTab] = useState('upload');
+  const [activeTab, setActiveTab] = useState<'upload' | 'preview' | 'settings' | 'logs' | 'download'>('upload');
+  const [previewScale, setPreviewScale] = useState(100);
+  const [previewDevice, setPreviewDevice] = useState<'iphone' | 'android'>('iphone');
   const [isBuilding, setIsBuilding] = useState(false);
   const [buildProgress, setBuildProgress] = useState(0);
   const [appName, setAppName] = useState('Mia Fantastica App');
@@ -146,6 +148,12 @@ export default function Dashboard() {
             onClick={() => setActiveTab('upload')} 
           />
           <SidebarItem 
+            icon={<Smartphone size={20} />} 
+            label="Anteprima" 
+            active={activeTab === 'preview'} 
+            onClick={() => setActiveTab('preview')} 
+          />
+          <SidebarItem 
             icon={<Settings size={20} />} 
             label="Impostazioni App" 
             active={activeTab === 'settings'} 
@@ -182,6 +190,7 @@ export default function Dashboard() {
           <div className="flex justify-between items-center max-w-5xl mx-auto">
             <h1 className="text-2xl font-semibold text-gray-900">
               {activeTab === 'upload' && 'Nuova Conversione'}
+              {activeTab === 'preview' && 'Anteprima App'}
               {activeTab === 'settings' && 'Personalizza App'}
               {activeTab === 'logs' && 'Cronologia Build'}
               {activeTab === 'download' && 'Pacchetti Generati'}
@@ -307,6 +316,90 @@ export default function Dashboard() {
                 </div>
               )}
             </section>
+          )}
+
+          {activeTab === 'preview' && (
+            <div className="flex flex-col items-center animate-in fade-in zoom-in-95 duration-500">
+              {/* Device Selector & Controls */}
+              <div className="flex items-center gap-4 mb-8 bg-white p-2 rounded-2xl border border-gray-100 shadow-sm">
+                <button 
+                  onClick={() => setPreviewDevice('iphone')}
+                  className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${previewDevice === 'iphone' ? 'bg-black text-white' : 'hover:bg-gray-50'}`}
+                >
+                  iPhone 15
+                </button>
+                <button 
+                  onClick={() => setPreviewDevice('android')}
+                  className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${previewDevice === 'android' ? 'bg-black text-white' : 'hover:bg-gray-50'}`}
+                >
+                  Pixel 8
+                </button>
+                <div className="w-px h-6 bg-gray-200 mx-2" />
+                <div className="flex items-center gap-2 px-2">
+                  <span className="text-xs font-bold text-gray-400">Zoom</span>
+                  <input 
+                    type="range" 
+                    min="50" 
+                    max="150" 
+                    value={previewScale} 
+                    onChange={(e) => setPreviewScale(parseInt(e.target.value))}
+                    className="w-24 accent-black"
+                  />
+                  <span className="text-xs font-mono text-gray-500 w-8">{previewScale}%</span>
+                </div>
+              </div>
+
+              {/* Professional Device Frame */}
+              <div 
+                className="relative transition-all duration-500"
+                style={{ transform: `scale(${previewScale / 100})` }}
+              >
+                {previewDevice === 'iphone' ? (
+                  /* iPhone 15 Pro Frame */
+                  <div className="w-[300px] h-[600px] bg-black rounded-[55px] p-3 shadow-2xl border-[6px] border-[#1f1f1f] relative overflow-hidden">
+                    {/* Dynamic Island */}
+                    <div className="absolute top-6 left-1/2 -translate-x-1/2 w-24 h-6 bg-black rounded-full z-20" />
+                    
+                    {/* Screen Content */}
+                    <div className="w-full h-full bg-white rounded-[42px] overflow-hidden relative">
+                      {url ? (
+                        <iframe src={url.startsWith('http') ? url : `https://${url}`} className="w-full h-full border-none" title="App Preview" />
+                      ) : (
+                        <div className="flex flex-col items-center justify-center h-full p-6 text-center">
+                          <div className="w-16 h-16 bg-gray-100 rounded-2xl mb-4 flex items-center justify-center">
+                            <Globe size={32} className="text-gray-300" />
+                          </div>
+                          <p className="text-gray-400 text-sm font-medium">Inserisci un URL per vedere l'anteprima</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  /* Android Pixel 8 Frame */
+                  <div className="w-[300px] h-[610px] bg-black rounded-[40px] p-2 shadow-2xl border-[4px] border-[#2a2a2a] relative overflow-hidden">
+                    {/* Camera Hole */}
+                    <div className="absolute top-4 left-1/2 -translate-x-1/2 w-3 h-3 bg-[#1a1a1a] rounded-full z-20" />
+                    
+                    {/* Screen Content */}
+                    <div className="w-full h-full bg-white rounded-[32px] overflow-hidden relative">
+                      {url ? (
+                        <iframe src={url.startsWith('http') ? url : `https://${url}`} className="w-full h-full border-none" title="App Preview" />
+                      ) : (
+                        <div className="flex flex-col items-center justify-center h-full p-6 text-center">
+                          <div className="w-16 h-16 bg-gray-100 rounded-2xl mb-4 flex items-center justify-center">
+                            <Globe size={32} className="text-gray-300" />
+                          </div>
+                          <p className="text-gray-400 text-sm font-medium">Inserisci un URL per vedere l'anteprima</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Device Shadow Reflection */}
+                <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 w-[80%] h-4 bg-black/10 blur-xl rounded-full" />
+              </div>
+            </div>
           )}
 
           {activeTab === 'settings' && (

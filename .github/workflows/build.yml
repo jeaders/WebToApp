@@ -31,6 +31,7 @@ jobs:
         
       - name: Capacitor Sync
         run: |
+          npx cap init "${{ github.event.inputs.app_name }}" "${{ github.event.inputs.app_id }}" --web-dir www
           npx cap add android
           npx cap sync android
           
@@ -69,6 +70,7 @@ jobs:
         
       - name: Capacitor Sync
         run: |
+          npx cap init "${{ github.event.inputs.app_name }}" "${{ github.event.inputs.app_id }}" --web-dir www
           npx cap add ios
           npx cap sync ios
           
