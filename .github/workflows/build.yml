@@ -28,18 +28,11 @@ jobs:
           node-version: 22
           
       - name: Install Dependencies
-        run: |
-          npm install
-          npm install -D webpack-cli
-        
-      - name: Build Web Project
-        run: npm run build
+        run: npm install
           
       - name: Initialize Capacitor
         run: |
           mkdir -p www
-          # Create a dummy index.html just to satisfy cap init (it won't be used for navigation)
-          echo 'Loading...' > www/index.html
           npx cap init "${{ github.event.inputs.app_name }}" "${{ github.event.inputs.app_id }}" --web-dir www
           
       - name: Configure Native App (Real App Mode)
@@ -118,17 +111,11 @@ jobs:
           node-version: 22
           
       - name: Install Dependencies
-        run: |
-          npm install
-          npm install -D webpack-cli
-        
-      - name: Build Web Project
-        run: npm run build
+        run: npm install
           
       - name: Initialize Capacitor
         run: |
           mkdir -p www
-          echo 'Loading...' > www/index.html
           npx cap init "${{ github.event.inputs.app_name }}" "${{ github.event.inputs.app_id }}" --web-dir www
           
       - name: Configure Native App (Real App Mode)
