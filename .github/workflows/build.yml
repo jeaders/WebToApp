@@ -73,10 +73,7 @@ jobs:
           
       - name: Install Dependencies
         run: npm install
-        
-      - name: Build Web Project
-        run: npm run build
-        
+
       - name: Capacitor Sync
         run: |
           npx cap init "${{ github.event.inputs.app_name }}" "${{ github.event.inputs.app_id }}" --web-dir www
