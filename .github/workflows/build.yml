@@ -53,13 +53,13 @@ jobs:
       - name: Build Android APK
         run: |
           cd android
-          ./gradlew assembleRelease
-          
+          ./gradlew assembleDebug
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: release-apk
-          path: android/app/build/outputs/apk/release/app-release-unsigned.apk
+          name: app-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
 
   build-ios:
     runs-on: macos-latest
