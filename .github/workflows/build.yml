@@ -33,6 +33,7 @@ jobs:
       - name: Initialize Capacitor
         run: |
           mkdir -p www
+          echo 'Loading...' > www/index.html
           npx cap init "${{ github.event.inputs.app_name }}" "${{ github.event.inputs.app_id }}" --web-dir www
           
       - name: Configure Native App (Real App Mode)
@@ -116,6 +117,7 @@ jobs:
       - name: Initialize Capacitor
         run: |
           mkdir -p www
+          echo 'Loading...' > www/index.html
           npx cap init "${{ github.event.inputs.app_name }}" "${{ github.event.inputs.app_id }}" --web-dir www
           
       - name: Configure Native App (Real App Mode)
