@@ -57,7 +57,8 @@ export default function Dashboard() {
           token: githubToken, 
           repo: githubRepo,
           appName,
-          appId
+          appId,
+          url
         }),
       });
 
