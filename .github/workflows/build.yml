@@ -28,7 +28,12 @@ jobs:
           node-version: 22
           
       - name: Install Dependencies
-        run: npm install
+        run: |
+          npm install
+          npm install -D webpack-cli
+        
+      - name: Build Web Project
+        run: npm run build
         
       - name: Create Web Assets Directory
         run: |
@@ -69,7 +74,12 @@ jobs:
           node-version: 22
           
       - name: Install Dependencies
-        run: npm install
+        run: |
+          npm install
+          npm install -D webpack-cli
+        
+      - name: Build Web Project
+        run: npm run build
         
       - name: Create Web Assets Directory
         run: |
