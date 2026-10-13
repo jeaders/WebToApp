@@ -1,0 +1,55 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { octo, getRun, listRunArtifacts, downloadArtifactZip } from '@/lib/github';
+import AdmZip from 'adm-zip';
+
+export const runtime = 'nodejs';
+
+export async function POST(req: NextRequest) {
+  try {
+    const { token, repo, runId } = await req.json();
+    if (!token || !repo || !runId) {
+      return NextResponse.json({ error: 'Parametri mancanti (token, repo, runId).' }, { status: 400 });
+    }
+    const [owner, repoName] = String(repo).split('/');
+    const octokit = octo(token);
+
+    const run = await getRun(octokit, owner, repoName, Number(runId));
+    if (run.status !== 'completed' || run.conclusion !== 'success') {
+      return NextResponse.json(
+        { error: 'La build non è ancora completata con successo.', status: run.status, conclusion: run.conclusion },
+        { status: 409 }
+      );
+    }
+
+    const arts = await listRunArtifacts(octokit, owner, repoName, Number(runId));
+    const art = arts.find((a) => !a.expired) || arts[0];
+    if (!art) {
+      return NextResponse.json({ error: 'Nessun artifact trovato per questa run.' }, { status: 404 });
+    }
+
+    const zipBuf = await downloadArtifactZip(token, art.archive_download_url);
+    const zip = new AdmZip(zipBuf);
+    const apkEntry = zip.getEntries().find((e) => !e.isDirectory && /\.apk$/i.test(e.entryName));
+    if (!apkEntry) {
+      return NextResponse.json({ error: 'APK non trovato dentro l\'artifact.' }, { status: 404 });
+    }
+    const apk = apkEntry.getData();
+    const body = new Uint8Array(apk);
+
+    return new NextResponse(body, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/vnd.android.package-archive',
+        'Content-Disposition': `attachment; filename="${(art.name || 'app')}.apk"`,
+        'Content-Length': String(body.length),
+        'Cache-Control': 'no-store',
+      },
+    });
+  } catch (error: any) {
+    console.error('cloud-artifact error:', error);
+    return NextResponse.json(
+      { error: error?.response?.data?.message || error?.message || 'Errore download APK' },
+      { status: 500 }
+    );
+  }
+}
