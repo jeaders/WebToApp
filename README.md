@@ -29,12 +29,23 @@ npm run dev
 ```
 
 ## Build Gratuito e Illimitato (GitHub Actions)
-Per compilare l'app gratuitamente (senza bisogno di un Mac o di un server potente):
-1. Carica questo progetto su un repository GitHub.
-2. Vai nella tab **Actions**.
-3. Seleziona il workflow **Build Mobile Apps**.
-4. Clicca su **Run workflow** inserendo il nome dell'app e il package ID.
-5. Al termine, scarica l'APK (Android) o l'archivio Xcode (iOS) dagli "Artifacts" della build.
+Il progetto include due workflow GitHub Actions che costruiscono l'app con **Capacitor** senza bisogno di un Mac o di un server potente:
+
+- **`.github/workflows/build.yml`** → costruisce l'**APK Android** (installabile). È il workflow usato dal pulsante "Genera APK (GitHub)".
+- **`.github/workflows/build-ios.yml`** → opzionale, separato, costruisce una `.app` per **simulatore iOS** (nessuna influenza sulla build Android). Per un `.ipa` installabile servono account Apple Developer + certificati.
+
+Il workflow Android è **auto-sufficiente**: installa Java, accetta le licenze dell'Android SDK, installa la piattaforma/build-tools richiesti (letti da `android/variables.gradle`), genera il progetto Capacitor con l'URL del sito e compila l'APK con `gradlew assembleDebug`.
+
+### Prerequisiti per Cockpit → APK
+1. **Actions attivo**: nel repo `jeaders/WebToApp` → *Settings → Actions → General* → *Allow all actions*. Il workflow è caricato, quindi lo trovi nella tab **Actions**.
+2. **Personal Access Token** (classic) con scope **`workflow`** (e `repo` se il repo è privato). In alternativa un fine-grained token con *Contents: read* + *Actions: write*.
+3. Nella dashboard: tab **Impostazioni App** → inserisci il token, il repo `jeaders/WebToApp`, l'**URL** del sito. Poi tab **Download** → **Genera APK (GitHub)**.
+4. Al termine, scarica l'artifact **`app-debug-<run_id>`** dalla run nella tab **Actions**.
+
+> Nota: la **build cloud supporta solo la modalità URL** (un sito online). La modalità **ZIP** genera un progetto sorgente scaricabile da compilare in locale. L'app carica il sito direttamente nella WebView nativa (`server.url`), quindi funziona anche con siti che bloccano l'iframe.
+
+### Trigger manuale (senza dashboard)
+Tab **Actions → Build Mobile Apps → Run workflow** e inserisci *App name*, *Package ID* e *URL del sito*.
 
 ## Note per lo Sviluppatore
 - **iOS IPA**: Per generare un file `.ipa` installabile direttamente, dovrai aggiungere i segreti `APPLE_CERTIFICATE` e `APPLE_PROVISIONING_PROFILE` e configurare Fastlane nel workflow.
