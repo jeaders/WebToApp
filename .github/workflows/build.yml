@@ -147,10 +147,10 @@ jobs:
             const cfg = JSON.parse(fs.readFileSync(p, "utf8"));
             const hasServer = !!(cfg.server && cfg.server.url);
             if (!process.env.SITE_ZIP && !hasServer) {
-              console.error("ERRORE: server.url assente nella config nativa (modalità URL). L'app mostrerebbe solo Loading.");
+              console.error("ERRORE: server.url assente nella config nativa. L applicazione mostrerebbe solo Loading.");
               process.exit(1);
             }
-            console.log("Config nativa OK -> " + (process.env.SITE_ZIP ? "bundled (zip)" : ("server.url=" + cfg.server.url)));
+            console.log("Config nativa OK -> modalita " + (process.env.SITE_ZIP ? "bundled (zip)" : ("server.url=" + cfg.server.url)));
           '
 
       - name: Setup Java 21
