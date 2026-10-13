@@ -123,8 +123,13 @@ jobs:
             if (process.env.SITE_ZIP && process.env.SITE_ZIP.length > 0) {
               // Modalità ZIP: app statica locale, gli asset sono in www/
             } else {
-              // Modalità URL: carica il sito remoto direttamente nella WebView nativa
-              cfg.server = { url: process.env.WEB_URL, cleartext: true, androidScheme: "https", allowNavigation: ["*"] };
+              // Modalità URL: normalizza lo schema (es. "sito.it" -> "https://sito.it")
+              let webUrl = (process.env.WEB_URL || "").trim();
+              if (webUrl && !/^https?:\/\//i.test(webUrl)) webUrl = "https://" + webUrl;
+              if (!webUrl) { console.error("WEB_URL vuoto in modalità URL."); process.exit(1); }
+              console.log("URL normalizzato:", webUrl);
+              // Carica il sito remoto direttamente nella WebView nativa
+              cfg.server = { url: webUrl, cleartext: true, androidScheme: "https", allowNavigation: ["*"] };
             }
             cfg.plugins = {
               SplashScreen: {
