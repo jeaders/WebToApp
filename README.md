@@ -1,52 +1,99 @@
-# WebToApp Platform MVP
+# WebToApp — Converti il tuo sito in un'APK Android
 
-Questa piattaforma permette di convertire siti web e progetti HTML/CSS/JS in app native Android e iOS utilizzando **Capacitor**.
+Piattaforma che trasforma un **sito web** (o un progetto **HTML/CSS/JS** in ZIP) in un'**app Android nativa** usando [Capacitor](https://capacitorjs.com). Il caricamento avviene dentro una **WebView nativa**, quindi funziona anche con i siti che bloccano l'iframe (`X-Frame-Options` / `frame-ancestors`). La compilazione dell'APK avviene su **GitHub Actions** (gratis per i repo pubblici).
 
-## Stack Tecnologico
-- **Frontend**: Next.js 14 (App Router), Tailwind CSS, Lucide Icons.
-- **Backend**: API Routes (Node.js) per la gestione del build system.
-- **Build Core**: Capacitor CLI.
-- **Styling**: Minimalist SaaS UI con Shadcn-like components.
+## Cosa fa
 
-## Flusso di Funzionamento
-1. **Input**: L'utente inserisce un URL o carica un file ZIP.
-2. **Preparazione**: Il backend crea una cartella temporanea, inizializza un progetto Capacitor e configura `capacitor.config.json`.
-3. **Asset Generation**: Viene utilizzato `@capacitor/assets` per generare icone e splash screen dalle immagini caricate.
-4. **Compilazione**: 
-   - Per Android: Viene eseguito `gradlew assembleRelease` via Docker.
-   - Per iOS: Viene generato il progetto Xcode pronto per essere compilato su un Mac o tramite GitHub Actions.
+- **Modalità URL**: incolli l'indirizzo di un sito → l'app lo carica direttamente nella WebView (`server.url`).
+- **Modalità ZIP**: carichi un archivio `.zip` con la tua app HTML/JS → i file vengono impacchettati nell'APK come app statica locale (nessuna connessione necessaria a runtime).
+- **iOS** (opzionale, workflow separato): genera una `.app` per simulatore (vedi sotto).
 
-## Funzionalità Avanzate Incluse
-- **Deep Linking**: Configurazione per associazioni di dominio.
-- **Preview Live**: Simulatore mockup integrato nella dashboard.
-- **Build Logs**: Terminale simulato per il monitoraggio in tempo reale.
-- **Sicurezza**: Suggerimenti per SSL Pinning e ProGuard.
+Al termine scarichi l'**APK installabile** direttamente dalla dashboard (o dagli *Artifacts* della run su GitHub).
 
-## Come Avviare
+---
+
+## Avvio in locale
+
 ```bash
 npm install
 npm run dev
+# apri http://localhost:3000
 ```
 
-## Build Gratuito e Illimitato (GitHub Actions)
-Il progetto include due workflow GitHub Actions che costruiscono l'app con **Capacitor** senza bisogno di un Mac o di un server potente:
+Requisiti: Node 18+ (consigliato 20/22). Non serve Android SDK in locale: la compilazione gira su GitHub.
 
-- **`.github/workflows/build.yml`** → costruisce l'**APK Android** (installabile). È il workflow usato dal pulsante "Genera APK (GitHub)".
-- **`.github/workflows/build-ios.yml`** → opzionale, separato, costruisce una `.app` per **simulatore iOS** (nessuna influenza sulla build Android). Per un `.ipa` installabile servono account Apple Developer + certificati.
+---
 
-Il workflow Android è **auto-sufficiente**: installa Java, accetta le licenze dell'Android SDK, installa la piattaforma/build-tools richiesti (letti da `android/variables.gradle`), genera il progetto Capacitor con l'URL del sito e compila l'APK con `gradlew assembleDebug`.
+## Come generare l'APK (procedura utente)
 
-### Prerequisiti per Cockpit → APK
-1. **Actions attivo**: nel repo `jeaders/WebToApp` → *Settings → Actions → General* → *Allow all actions*. Il workflow è caricato, quindi lo trovi nella tab **Actions**.
-2. **Personal Access Token** (classic) con scope **`workflow`** (e `repo` se il repo è privato). In alternativa un fine-grained token con *Contents: read* + *Actions: write*.
-3. Nella dashboard: tab **Impostazioni App** → inserisci il token, il repo `jeaders/WebToApp`, l'**URL** del sito. Poi tab **Download** → **Genera APK (GitHub)**.
-4. Al termine, scarica l'artifact **`app-debug-<run_id>`** dalla run nella tab **Actions**.
+1. **Prerequisito — attiva Actions** sul repo: `Settings → Actions → General → Allow all actions`.
+2. **Crea un Personal Access Token (classic)** con scope **`workflow`** e **`repo`**  
+   (da github.com → Settings → Developer settings → Personal access tokens → Tokens (classic)).  
+   In alternativa un *fine-grained token* con permessi **Contents: read** e **Actions: write**.
+3. Nella dashboard:
+   - Tab **Nuova Conversione**: inserisci l'**URL** del sito **oppure** carica uno **ZIP**.
+   - Tab **Impostazioni App**: imposta Nome app, Package ID (es. `com.tuonome.app`), e nella sezione *GitHub Cloud Compiler* inserisci il **token** e il **repository** nel formato `utente/repo` (es. `jeaders/WebToApp`).
+4. Tab **Download** → **Genera APK (GitHub)**.
+5. Attendi: la dashboard mostra lo stato e, a build completata, compare il pulsante **Scarica APK**.
 
-> Nota: la **build cloud supporta solo la modalità URL** (un sito online). La modalità **ZIP** genera un progetto sorgente scaricabile da compilare in locale. L'app carica il sito direttamente nella WebView nativa (`server.url`), quindi funziona anche con siti che bloccano l'iframe.
+> La build cloud in **modalità ZIP** necessita di uno ZIP; in **modalità URL** serve l'indirizzo del sito. Lo ZIP ha priorità se carichi un file.
 
-### Trigger manuale (senza dashboard)
-Tab **Actions → Build Mobile Apps → Run workflow** e inserisci *App name*, *Package ID* e *URL del sito*.
+---
 
-## Note per lo Sviluppatore
-- **iOS IPA**: Per generare un file `.ipa` installabile direttamente, dovrai aggiungere i segreti `APPLE_CERTIFICATE` e `APPLE_PROVISIONING_PROFILE` e configurare Fastlane nel workflow.
-- **Android Signing**: L'APK generato è "unsigned". Per pubblicarlo sul Play Store, dovrai firmarlo usando `apksigner` o configurare il keystore nei segreti di GitHub.
+## I due workflow (GitHub Actions)
+
+- **`Build Mobile Apps`** (`.github/workflows/build.yml`) → costruisce l'**APK Android**. Usato dal pulsante *Genera APK (GitHub)*. È auto-sufficiente: installa Node, Java 21, accetta le licenze dell'Android SDK, installa la piattaforma/build-tools richiesti, genera il progetto Capacitor e compila con `gradlew assembleDebug`.
+- **`Build iOS App`** (`.github/workflows/build-ios.yml`) → **separato e opzionale**, costruisce una `.app` per **simulatore** senza firma. Non influisce sulla build Android.
+
+Puoi anche avviare la build Android manualmente: tab **Actions → Build Mobile Apps → Run workflow** e compila *App name*, *Package ID* e *URL*.
+
+---
+
+## Note su firma, release e limiti
+
+- L'APK prodotto è in **debug** (firmato con la debug key, quindi **installabile** via sideload). Per pubblicarlo sul Play Store serve una **release firmata** con il tuo keystore.
+- **iOS**: per un `.ipa` installabile su dispositivo servono un account **Apple Developer** e i certificati/provisioning. Il workflow incluso produce solo una build da simulatore.
+- **Gratis**: GitHub Actions è **gratuito e illimitato per i repo pubblici**. Gli artifact restano disponibili **14 giorni**.
+- **Branch `ci-build`** (solo modalità ZIP): la dashboard ci committa `builds/site.zip` e avvia la build su quel branch. Viene ri-creato/azzerato a ogni build dallo stato di `main`; puoi cancellarlo quando vuoi.
+
+---
+
+## 🔒 Privacy e sicurezza (importante)
+
+- **Il token GitHub non viene mai salvato né committato.** Viene usato solo in memoria durante la richiesta di build, dal browser, e non viene scritto su disco né inserito nel repository.
+- **Nessun segreto è presente nel codice.** Il token lo inserisce l'utente a runtime.
+- I file **generati e personali sono in `.gitignore`** (non finiscono nel repo): `.env*`, `secrets.json`, `android/`, `ios/`, `www/`, `builds/`, `capacitor.config.json|ts|js|mjs`. Così, se più persone usano la piattaforma, l'URL/sito di uno non viene committato nel repo condiviso.
+- **Repo pubblico o privato?** Il progetto è utilizzabile così com'è. Se vuoi tenere tutto riservato, imposta il repo su **privato**: `Settings → General → Danger Zone → Change repository visibility → Private`. Il workflow continua a funzionare (usa il tuo token).
+- **Non committare mai** il tuo Personal Access Token. Se lo hai esposto, revocalo nelle impostazioni GitHub.
+
+---
+
+## Struttura del progetto
+
+```
+.github/workflows/build.yml        # build APK Android (auto-sufficiente)
+.github/workflows/build-ios.yml    # build iOS (simulatore, opzionale)
+src/app/page.tsx                   # dashboard
+src/app/api/build/route.ts         # genera il progetto sorgente (ZIP) in locale
+src/app/api/github-build/route.ts  # avvia la build cloud (URL o ZIP) su GitHub Actions
+src/app/api/cloud-status/route.ts  # stato della run
+src/app/api/cloud-artifact/route.ts# scarica l'APK dall'artifact
+src/lib/github.ts                  # helper API GitHub (commit, dispatch, artifact)
+src/lib/builder.ts                 # prepara il progetto Capacitor (builder locale)
+```
+
+---
+
+## Risoluzione problemi
+
+- **"Workflow build.yml non trovato"** → Actions non è attivo oppure il file non è su `main`. Attiva Actions e premi *Run workflow* una volta dalla tab Actions.
+- **L'app mostra solo "Loading…"** → non dovrebbe più accadere: il workflow verifica che `server.url` sia presente nella config nativa e fallisce la build se manca. Se usi uno ZIP, assicurati che contenga `index.html` nella root (o in un'unica cartella di primo livello).
+- **Errore licenze/SDK Android** → lo step *Setup Android SDK* le accetta in automatico.
+- **La build cloud con ZIP fallisce** → verifica che lo ZIP contenga un `index.html` e sia < ~45MB.
+- **DNS/rete intermittente** durante il download → riprova (il build su GitHub è indipendente).
+
+---
+
+## Stack
+
+Next.js 14 (App Router), TypeScript, Tailwind CSS, Capacitor 8, Octokit (GitHub API), AdmZip.
