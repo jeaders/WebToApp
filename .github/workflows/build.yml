@@ -100,23 +100,26 @@ jobs:
 
       - name: Configure Capacitor
         run: |
+          set -e
+          # In un progetto TypeScript "cap init" crea capacitor.config.ts: rimuoviamolo
+          # e scriviamo un capacitor.config.json canonico così il config sia sempre letto.
+          rm -f capacitor.config.ts capacitor.config.js capacitor.config.mjs
           node -e '
             const fs = require("fs");
             const p = "./capacitor.config.json";
-            const base = { appId: process.env.APP_ID, appName: process.env.APP_NAME, webDir: "www", bundledWebRuntime: false };
-            let cfg = base;
-            if (fs.existsSync(p)) { try { cfg = JSON.parse(fs.readFileSync(p, "utf8")); } catch (e) { cfg = base; } }
-            cfg.appId = process.env.APP_ID;
-            cfg.appName = process.env.APP_NAME;
-            cfg.webDir = cfg.webDir || "www";
+            const cfg = {
+              appId: process.env.APP_ID,
+              appName: process.env.APP_NAME,
+              webDir: "www",
+              bundledWebRuntime: false,
+            };
             if (process.env.SITE_ZIP && process.env.SITE_ZIP.length > 0) {
-              // App statica locale: niente server.url
-              delete cfg.server;
+              // Modalità ZIP: app statica locale, gli asset sono in www/
             } else {
-              // Carica il sito remoto direttamente nella WebView nativa
+              // Modalità URL: carica il sito remoto direttamente nella WebView nativa
               cfg.server = { url: process.env.WEB_URL, cleartext: true, androidScheme: "https", allowNavigation: ["*"] };
             }
-            cfg.plugins = Object.assign({}, cfg.plugins, {
+            cfg.plugins = {
               SplashScreen: {
                 launchShowDuration: 1200,
                 backgroundColor: "#000000",
@@ -124,7 +127,7 @@ jobs:
                 showSpinner: true,
                 spinnerColor: "#ffffff",
               },
-            });
+            };
             fs.writeFileSync(p, JSON.stringify(cfg, null, 2));
             console.log("capacitor.config.json configurato:");
             console.log(fs.readFileSync(p, "utf8"));
@@ -134,6 +137,21 @@ jobs:
         run: |
           npx cap add android
           npx cap sync android
+
+      - name: Verify runtime config in native assets
+        run: |
+          node -e '
+            const fs = require("fs");
+            const p = "android/app/src/main/assets/capacitor.config.json";
+            if (!fs.existsSync(p)) { console.error("Config nativa mancante: " + p); process.exit(1); }
+            const cfg = JSON.parse(fs.readFileSync(p, "utf8"));
+            const hasServer = !!(cfg.server && cfg.server.url);
+            if (!process.env.SITE_ZIP && !hasServer) {
+              console.error("ERRORE: server.url assente nella config nativa (modalità URL). L'app mostrerebbe solo Loading.");
+              process.exit(1);
+            }
+            console.log("Config nativa OK -> " + (process.env.SITE_ZIP ? "bundled (zip)" : ("server.url=" + cfg.server.url)));
+          '
 
       - name: Setup Java 21
         uses: actions/setup-java@v4
