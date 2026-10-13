@@ -153,6 +153,23 @@ jobs:
             console.log("Config nativa OK -> modalita " + (process.env.SITE_ZIP ? "bundled (zip)" : ("server.url=" + cfg.server.url)));
           '
 
+      - name: Harden native app (WebView / giochi)
+        run: |
+          node -e '
+            const fs = require("fs");
+            const p = "android/app/src/main/AndroidManifest.xml";
+            if (!fs.existsSync(p)) { console.log("manifest non trovato, skip"); process.exit(0); }
+            let s = fs.readFileSync(p, "utf8");
+            if (!/android.permission.INTERNET/.test(s)) {
+              s = s.replace(/<application\b/, "<uses-permission android:name=\"android.permission.INTERNET\" />\n    <application");
+            }
+            if (/<application\b/.test(s) && !/android:hardwareAccelerated/.test(s)) {
+              s = s.replace(/<application\b/, "<application android:hardwareAccelerated=\"true\" android:largeHeap=\"true\"");
+            }
+            fs.writeFileSync(p, s);
+            console.log("Manifest aggiornato: hardwareAccelerated + largeHeap + INTERNET.");
+          '
+
       - name: Setup Java 21
         uses: actions/setup-java@v4
         with:
