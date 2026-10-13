@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { octo, getRun, listRunArtifacts } from '@/lib/github';
+import { octo, serverConfig, getRun, listRunArtifacts } from '@/lib/github';
 
 export const runtime = 'nodejs';
 
@@ -7,7 +7,10 @@ const WORKFLOW_ID = 'build.yml';
 
 export async function POST(req: NextRequest) {
   try {
-    const { token, repo, branch } = await req.json();
+    const { token: bodyToken, repo: bodyRepo, branch } = await req.json();
+    const server = serverConfig();
+    const token = bodyToken || server.token;
+    const repo = bodyRepo || server.repo;
     if (!token || !repo || !branch) {
       return NextResponse.json({ error: 'Parametri mancanti (token, repo, branch).' }, { status: 400 });
     }
