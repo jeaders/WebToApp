@@ -1,15 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   octo,
+  serverConfig,
   workflowExists,
   ensureBranchFrom,
   commitFile,
   dispatchWorkflow,
+  recentRunStats,
 } from '@/lib/github';
 
 export const runtime = 'nodejs';
 
 const WORKFLOW_ID = 'build.yml';
+
+// Limiti anti-abuso (proteggono la quota GitHub Actions del proprietario).
+const MAX_ACTIVE_RUNS = 2; // build in corso contemporaneamente
+const MAX_RUNS_PER_HOUR = 40; // build avviate nell'ultima ora (tutti i visitatori)
 
 function parseRepo(repo: string): { owner: string; repo: string } | null {
   if (!repo || !repo.includes('/')) return null;
@@ -22,6 +28,7 @@ export async function POST(req: NextRequest) {
   try {
     const ct = req.headers.get('content-type') || '';
 
+    const server = serverConfig(); // token/repo configurati dal proprietario (env)
     let token = '';
     let repo = '';
     let appName = '';
@@ -50,8 +57,18 @@ export async function POST(req: NextRequest) {
       branch = body.branch || 'main';
     }
 
+    // Default dalla configurazione server: il visitatore non deve inserire nulla.
+    token = token || server.token;
+    repo = repo || server.repo;
+
     if (!token || !repo) {
-      return NextResponse.json({ error: 'Token o repository mancanti.' }, { status: 400 });
+      return NextResponse.json(
+        {
+          error:
+            'Servizio non configurato: manca WEBTOAPP_GITHUB_TOKEN / WEBTOAPP_GITHUB_REPO sul server.',
+        },
+        { status: 503 }
+      );
     }
     const parsed = parseRepo(repo);
     if (!parsed) {
@@ -76,6 +93,22 @@ export async function POST(req: NextRequest) {
           { status: 404 }
         );
       }
+    }
+
+    // Anti-abuso: blocca se ci sono già troppe build in corso o troppe nell'ultima ora.
+    try {
+      const stats = await recentRunStats(octokit, owner, repoName, WORKFLOW_ID);
+      if (stats.active >= MAX_ACTIVE_RUNS || stats.lastHour >= MAX_RUNS_PER_HOUR) {
+        return NextResponse.json(
+          {
+            error:
+              'Servizio molto occupato: troppe build in corso o nelle ultime ore. Riprova tra qualche minuto.',
+          },
+          { status: 429 }
+        );
+      }
+    } catch {
+      // se il controllo statistiche fallisce, proseguiamo comunque
     }
 
     if (file) {
