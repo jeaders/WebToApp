@@ -2,6 +2,25 @@ import { Octokit } from 'octokit';
 
 const API_HEADERS = { 'X-GitHub-Api-Version': '2022-11-28' };
 
+/**
+ * Configurazione lato SERVER (variabili d'ambiente).
+ * Il token NON viene MAI esposto al browser: resta solo sul server.
+ * Variabili:
+ *   WEBTOAPP_GITHUB_TOKEN  -> PAT con scope repo + workflow
+ *   WEBTOAPP_GITHUB_REPO   -> "utente/repo" (es. jeaders/WebToApp)
+ */
+export function serverConfig(): { token: string; repo: string } {
+  return {
+    token: process.env.WEBTOAPP_GITHUB_TOKEN || process.env.WEBTOAPP_TOKEN || '',
+    repo: process.env.WEBTOAPP_GITHUB_REPO || process.env.WEBTOAPP_REPO || '',
+  };
+}
+
+export function hasServerConfig(): boolean {
+  const c = serverConfig();
+  return Boolean(c.token && c.repo);
+}
+
 export function octo(token: string) {
   return new Octokit({ auth: token });
 }
@@ -176,4 +195,39 @@ export async function downloadArtifactZip(token: string, archiveUrl: string): Pr
   }
   if (r1.ok) return Buffer.from(await r1.arrayBuffer());
   throw new Error(`Download artifact fallito (${r1.status})`);
+}
+
+/**
+ * Statistiche anti-abuso: quante run workflow_dispatch sono attive ora e quante
+ * sono state create nell'ultima ora. Protegge la quota Actions del proprietario
+ * quando il servizio è aperto ai visitatori (token lato server).
+ */
+export async function recentRunStats(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  workflowId: string
+): Promise<{ active: number; lastHour: number }> {
+  const { data } = await octokit.request(
+    'GET /repos/{owner}/{repo}/actions/workflows/{workflow_id}/runs',
+    {
+      owner,
+      repo,
+      workflow_id: workflowId,
+      event: 'workflow_dispatch',
+      per_page: 50,
+      headers: API_HEADERS,
+    }
+  );
+  const runs = (data.workflow_runs || []) as any[];
+  const now = Date.now();
+  const hourAgo = now - 60 * 60 * 1000;
+  let active = 0;
+  let lastHour = 0;
+  for (const r of runs) {
+    if (r.status !== 'completed') active++;
+    const created = new Date(r.created_at).getTime();
+    if (!Number.isNaN(created) && created >= hourAgo) lastHour++;
+  }
+  return { active, lastHour };
 }
