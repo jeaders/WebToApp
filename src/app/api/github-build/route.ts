@@ -61,6 +61,9 @@ export async function POST(req: NextRequest) {
     token = token || server.token;
     repo = repo || server.repo;
 
+    // Normalizza l'URL: aggiunge https:// se manca lo schema (evita crash della WebView).
+    if (url && !/^https?:\/\//i.test(url)) url = 'https://' + url;
+
     if (!token || !repo) {
       return NextResponse.json(
         {
