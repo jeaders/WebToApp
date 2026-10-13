@@ -58,6 +58,24 @@ Puoi anche avviare la build Android manualmente: tab **Actions → Build Mobile 
 
 ---
 
+## Deploy su Netlify (produzione)
+
+Puoi pubblicare la dashboard su **Netlify**. Attenzione: **Netlify non compila l'APK** — ospita solo la dashboard e le API che *avviano* la build. La compilazione gira su **GitHub Actions**.
+
+1. Fai il push del repo su GitHub (branch `main`).
+2. Su Netlify: **Add new site → Import an existing project** → seleziona il repo.
+3. Build command: `npm run build` (già impostato in `netlify.toml`). **Non servono variabili d'ambiente**: il token GitHub lo inserisce l'utente a runtime dalla dashboard e non viene mai salvato nel sito.
+4. Deploy. Dalla tab **Download → Genera APK (GitHub)** avvii la build e, a fine compilazione, scarichi l'APK.
+
+**Cosa cambia su Netlify (serverless):**
+- ✅ La build APK via **GitHub Actions** funziona (sia **URL** sia **ZIP**).
+- ⚠️ La generazione dello **ZIP sorgente locale** è **disattivata** (il filesystem serverless è di sola lettura): su Netlify resta solo il percorso cloud.
+- ⚡ Le funzioni rispondono **subito** dopo l'avvio della build (nessuna attesa lunga), così non scattano i timeout delle funzioni Netlify; lo stato viene letto con chiamate brevi separate.
+
+> Per ricevere l'APK serve comunque un **token GitHub** e un **repo** configurati (la build gira sul tuo account/repo). GitHub Actions è **gratis** per i repo pubblici.
+
+---
+
 ## 🔒 Privacy e sicurezza (importante)
 
 - **Il token GitHub non viene mai salvato né committato.** Viene usato solo in memoria durante la richiesta di build, dal browser, e non viene scritto su disco né inserito nel repository.
