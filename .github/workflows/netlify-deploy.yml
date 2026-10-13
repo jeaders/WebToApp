@@ -1,0 +1,38 @@
+name: Deploy to Netlify
+
+# Deploy automatico su Netlify ad ogni push su main (o su richiesta).
+# Metodo sicuro: usa un "Build Hook" di Netlify salvato come secret
+# NETLIFY_BUILD_HOOK_URL. Se Netlify è già collegato al repo via Git,
+# l'auto-deploy è comunque già attivo e questo workflow è ridondante ma innocuo.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  trigger:
+    name: Trigger Netlify build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Netlify build hook
+        env:
+          NETLIFY_BUILD_HOOK_URL: ${{ secrets.NETLIFY_BUILD_HOOK_URL }}
+        run: |
+          if [ -z "${NETLIFY_BUILD_HOOK_URL}" ]; then
+            echo "NETLIFY_BUILD_HOOK_URL non impostato: salto il trigger."
+            echo "(Se il sito è collegato al repo in Netlify, l'auto-deploy via push è già attivo.)"
+            exit 0
+          fi
+          echo "Avvio deploy su Netlify..."
+          code=$(curl -s -o /tmp/netlify_out.txt -w "%{http_code}" -X POST -H "Content-Type: application/json" -d '{}' "${NETLIFY_BUILD_HOOK_URL}")
+          echo "HTTP ${code}"
+          cat /tmp/netlify_out.txt || true
+          if [ "$code" -ge 200 ] && [ "$code" -lt 300 ]; then
+            echo "Deploy Netlify avviato."
+          else
+            echo "::warning::Il build hook ha risposto ${code}. Verifica il secret NETLIFY_BUILD_HOOK_URL."
+          fi
