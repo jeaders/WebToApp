@@ -5,11 +5,9 @@ import {
   ensureBranchFrom,
   commitFile,
   dispatchWorkflow,
-  latestRun,
 } from '@/lib/github';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60;
 
 const WORKFLOW_ID = 'build.yml';
 
@@ -106,15 +104,14 @@ export async function POST(req: NextRequest) {
         web_url: url,
         site_zip: zipPath,
       });
-      const run = await latestRun(octokit, owner, repoName, WORKFLOW_ID, buildBranch);
+      // Rispondiamo subito: su ambienti serverless (Netlify) le funzioni hanno
+      // un timeout breve. Lo stato viene recuperato da /api/cloud-latest.
       return NextResponse.json({
         success: true,
         mode: 'zip',
-        runId: run?.id ?? null,
-        runUrl: run?.html_url ?? null,
-        message: run
-          ? 'Build avviata dal tuo ZIP. Attendi il termine e scarica l\'APK.'
-          : 'Build avviata dal tuo ZIP. Controlla la tab Actions.',
+        branch: buildBranch,
+        repo: `${owner}/${repoName}`,
+        message: 'Build avviata dal tuo ZIP.',
       });
     }
 
@@ -125,15 +122,12 @@ export async function POST(req: NextRequest) {
       web_url: url,
       site_zip: '',
     });
-    const run = await latestRun(octokit, owner, repoName, WORKFLOW_ID, branch);
     return NextResponse.json({
       success: true,
       mode: 'url',
-      runId: run?.id ?? null,
-      runUrl: run?.html_url ?? null,
-      message: run
-        ? 'Build avviata. Attendi il termine e scarica l\'APK.'
-        : 'Build avviata. Controlla la tab Actions.',
+      branch,
+      repo: `${owner}/${repoName}`,
+      message: 'Build avviata.',
     });
   } catch (error: any) {
     console.error('GitHub API Error:', error);
