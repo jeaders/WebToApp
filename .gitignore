@@ -36,3 +36,21 @@ next-env.d.ts
 /temp_builds
 /temp_uploads
 /public/downloads/*.zip
+
+# local env files / secrets (mai committare token o segreti)
+.env
+.env.*
+!.env.example
+*.secret
+secrets.json
+
+# Capacitor / build generati (creati a runtime dal workflow, per-build e per-utente)
+/android
+/ios
+/www
+/builds
+/capacitor.config.json
+/capacitor.config.ts
+/capacitor.config.js
+/capacitor.config.mjs
+/android/app/src/main/assets/public
