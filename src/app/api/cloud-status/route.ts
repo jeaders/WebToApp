@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { octo, getRun, listRunArtifacts } from '@/lib/github';
+import { octo, serverConfig, getRun, listRunArtifacts } from '@/lib/github';
 
 export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
   try {
-    const { token, repo, runId } = await req.json();
+    const { token: bodyToken, repo: bodyRepo, runId } = await req.json();
+    const server = serverConfig();
+    const token = bodyToken || server.token;
+    const repo = bodyRepo || server.repo;
     if (!token || !repo || !runId) {
       return NextResponse.json({ error: 'Parametri mancanti (token, repo, runId).' }, { status: 400 });
     }
