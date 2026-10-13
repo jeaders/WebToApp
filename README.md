@@ -24,19 +24,37 @@ Requisiti: Node 18+ (consigliato 20/22). Non serve Android SDK in locale: la com
 
 ---
 
-## Come generare l'APK (procedura utente)
+## Come generare l'APK (procedura visitatore)
 
-1. **Prerequisito — attiva Actions** sul repo: `Settings → Actions → General → Allow all actions`.
-2. **Crea un Personal Access Token (classic)** con scope **`workflow`** e **`repo`**  
-   (da github.com → Settings → Developer settings → Personal access tokens → Tokens (classic)).  
-   In alternativa un *fine-grained token* con permessi **Contents: read** e **Actions: write**.
-3. Nella dashboard:
-   - Tab **Nuova Conversione**: inserisci l'**URL** del sito **oppure** carica uno **ZIP**.
-   - Tab **Impostazioni App**: imposta Nome app, Package ID (es. `com.tuonome.app`), e nella sezione *GitHub Cloud Compiler* inserisci il **token** e il **repository** nel formato `utente/repo` (es. `jeaders/WebToApp`).
-4. Tab **Download** → **Genera APK (GitHub)**.
-5. Attendi: la dashboard mostra lo stato e, a build completata, compare il pulsante **Scarica APK**.
+Quando la build cloud è configurata dal gestore del sito, il visitatore **non deve inserire alcun token**: solo il link (o lo ZIP).
 
-> La build cloud in **modalità ZIP** necessita di uno ZIP; in **modalità URL** serve l'indirizzo del sito. Lo ZIP ha priorità se carichi un file.
+1. Tab **Nuova Conversione**: inserisci l'**URL** del sito **oppure** carica uno **ZIP**.
+2. (Opzionale) Tab **Impostazioni App**: personalizza Nome app e Package ID (es. `com.tuonome.app`).
+3. Tab **Download** → **Genera APK (GitHub)**.
+4. Attendi: la dashboard mostra lo stato e, a build completata, compare il pulsante **Scarica APK**.
+
+> Se nelle Impostazioni vedi i campi *GitHub Token / Repository*, significa che il sito **non** è preconfigurato: in quel caso servono token+repo (vedi sotto). Altrimenti la build cloud è già attiva e pronta.
+
+**Modalità:** in **modalità URL** serve l'indirizzo del sito; in **modalità ZIP** serve un archivio. Lo ZIP ha priorità se carichi un file.
+
+---
+
+## Configurazione per il gestore del sito (una tantum)
+
+Per far sì che i visitatori debbano solo incollare l'URL, configura il token **lato server** (non nel codice):
+
+1. Crea un **Personal Access Token** (classic) con scope **`workflow`** e **`repo`**.
+2. Su **Netlify → Site settings → Build & deploy → Environment → Environment variables** aggiungi:
+   - `WEBTOAPP_GITHUB_TOKEN` = il tuo token  *(segreto, solo server)*
+   - `WEBTOAPP_GITHUB_REPO` = `jeaders/WebToApp` *(o il tuo `utente/repo`)*
+3. Verifica che **Actions** sia attivo sul repo: `Settings → Actions → General → Allow all actions`.
+4. Rifai il deploy. Ora la dashboard mostrerà "✅ Build cloud già configurata" e i campi token scompaiono.
+
+**Anti‑abuso:** poiché chiunque può avviare build sul tuo account, c'è un limite automatico (max **2 build in contemporanea** e **40 build/ora**). Oltre soglia la build viene rifiutata con un messaggio "riprova più tardi".
+
+**Deploy automatico ad ogni modifica:** hai due opzioni (anche convivono):
+- **Opzione A (consigliata):** collega il repo a Netlify (Import from GitHub). Netlify esegue il deploy **automaticamente ad ogni push** su `main`.
+- **Opzione B (build hook):** crea un *Build Hook* in Netlify (Site settings → Build & deploy → Build hooks), salva l'URL come **secret GitHub `NETLIFY_BUILD_HOOK_URL`** (Settings → Secrets and variables → Actions). Il workflow `.github/workflows/netlify-deploy.yml` chiamerà l'hook ad ogni push su `main`.
 
 ---
 
@@ -64,8 +82,9 @@ Puoi pubblicare la dashboard su **Netlify**. Attenzione: **Netlify non compila l
 
 1. Fai il push del repo su GitHub (branch `main`).
 2. Su Netlify: **Add new site → Import an existing project** → seleziona il repo.
-3. Build command: `npm run build` (già impostato in `netlify.toml`). **Non servono variabili d'ambiente**: il token GitHub lo inserisce l'utente a runtime dalla dashboard e non viene mai salvato nel sito.
-4. Deploy. Dalla tab **Download → Genera APK (GitHub)** avvii la build e, a fine compilazione, scarichi l'APK.
+3. Build command: `npm run build` (già impostato in `netlify.toml`).
+4. **Environment variables** (necessarie per la build cloud): imposta `WEBTOAPP_GITHUB_TOKEN` e `WEBTOAPP_GITHUB_REPO` (vedi *Configurazione per il gestore*). Se il sito è già collegato a GitHub, ad ogni push su `main` Netlify ridistribuisce automaticamente; in alternativa usa il build hook (`NETLIFY_BUILD_HOOK_URL`).
+5. Deploy. Il visitatore dovrà solo incollare l'URL → **Genera APK (GitHub)** → **Scarica APK**.
 
 **Cosa cambia su Netlify (serverless):**
 - ✅ La build APK via **GitHub Actions** funziona (sia **URL** sia **ZIP**).
@@ -78,11 +97,11 @@ Puoi pubblicare la dashboard su **Netlify**. Attenzione: **Netlify non compila l
 
 ## 🔒 Privacy e sicurezza (importante)
 
-- **Il token GitHub non viene mai salvato né committato.** Viene usato solo in memoria durante la richiesta di build, dal browser, e non viene scritto su disco né inserito nel repository.
-- **Nessun segreto è presente nel codice.** Il token lo inserisce l'utente a runtime.
-- I file **generati e personali sono in `.gitignore`** (non finiscono nel repo): `.env*`, `secrets.json`, `android/`, `ios/`, `www/`, `builds/`, `capacitor.config.json|ts|js|mjs`. Così, se più persone usano la piattaforma, l'URL/sito di uno non viene committato nel repo condiviso.
-- **Repo pubblico o privato?** Il progetto è utilizzabile così com'è. Se vuoi tenere tutto riservato, imposta il repo su **privato**: `Settings → General → Danger Zone → Change repository visibility → Private`. Il workflow continua a funzionare (usa il tuo token).
-- **Non committare mai** il tuo Personal Access Token. Se lo hai esposto, revocalo nelle impostazioni GitHub.
+- **Il token GitHub vive solo sul server** (variabile d'ambiente `WEBTOAPP_GITHUB_TOKEN` su Netlify). **Non viene mai inviato al browser né esposto al visitatore**: le API lo leggono da `process.env` lato server.
+- **Nessun token/secret è committato** nel codice né in `netlify.toml`. Per lo sviluppo locale copia `.env.example` in `.env` (già escluso dal git).
+- I file **generati e personali sono in `.gitignore`** (non finiscono nel repo): `.env*`, `.env.example` escluso apposta, `secrets.json`, `android/`, `ios/`, `www/`, `builds/`, `capacitor.config.*`. Così l'URL/sito di un visitatore non viene committato nel repo condiviso.
+- **Servizio aperto ai visitatori = attenzione:** chiunque può avviare build sul tuo account. È attivo un **limite anti‑abuso** (2 build contemporanee, 40/ora). Il repo resta pubblico ma il token resta segreto lato server.
+- **Non committare mai** il PAT. Se lo hai esposto, revocalo su GitHub.
 
 ---
 
