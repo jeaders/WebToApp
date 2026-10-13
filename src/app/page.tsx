@@ -37,7 +37,68 @@ export default function Dashboard() {
   const [downloadLink, setDownloadLink] = useState<string | null>(null);
   const [githubToken, setGithubToken] = useState('');
   const [githubRepo, setGithubRepo] = useState('');
-  const [cloudBuildStatus, setCloudBuildStatus] = useState<'idle' | 'running' | 'success' | 'failed'>('idle');
+  const [cloudBuildStatus, setCloudBuildStatus] = useState<'idle' | 'dispatching' | 'building' | 'success' | 'failed'>('idle');
+  const [cloudRunId, setCloudRunId] = useState<number | null>(null);
+  const [cloudRunUrl, setCloudRunUrl] = useState<string | null>(null);
+  const [apkReady, setApkReady] = useState(false);
+
+  const pollCloudStatus = async (runId: number) => {
+    try {
+      const res = await fetch('/api/cloud-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: githubToken, repo: githubRepo, runId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Errore stato');
+      if (data.status === 'completed') {
+        if (data.conclusion === 'success') {
+          setCloudBuildStatus('success');
+          setApkReady(true);
+          addLog("✅ Build completata! APK pronto per il download.");
+        } else {
+          setCloudBuildStatus('failed');
+          addLog(`❌ Build terminata con esito: ${data.conclusion || 'sconosciuto'}.`);
+        }
+        return true;
+      }
+      addLog(`⏳ Stato build: ${data.status}...`);
+      return false;
+    } catch (error: any) {
+      addLog(`Errore polling: ${error.message}`);
+      return false;
+    }
+  };
+
+  const downloadApk = async () => {
+    if (!cloudRunId) return;
+    addLog("Download APK in corso...");
+    try {
+      const res = await fetch('/api/cloud-artifact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: githubToken, repo: githubRepo, runId: cloudRunId }),
+      });
+      const ct = res.headers.get('content-type') || '';
+      if (ct.includes('application/json')) {
+        const data = await res.json();
+        throw new Error(data.error || 'Errore download');
+      }
+      if (!res.ok) throw new Error('Errore download APK');
+      const blob = await res.blob();
+      const urlB = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = urlB;
+      a.download = `${appName.replace(/\s+/g, '-') || 'app'}-${appId}.apk`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(urlB);
+      addLog("APK scaricato.");
+    } catch (error: any) {
+      addLog(`ERRORE download APK: ${error.message}`);
+    }
+  };
 
   const triggerCloudBuild = async () => {
     if (!githubToken || !githubRepo) {
@@ -45,27 +106,54 @@ export default function Dashboard() {
       setActiveTab('settings');
       return;
     }
+    if (!url && !selectedFile) {
+      alert("Inserisci un URL del sito oppure carica uno ZIP da compilare.");
+      setActiveTab('upload');
+      return;
+    }
 
-    setCloudBuildStatus('running');
-    addLog("Innesco build cloud su GitHub Actions...");
-    
+    setCloudBuildStatus('dispatching');
+    setApkReady(false);
+    setCloudRunId(null);
+    setCloudRunUrl(null);
+    addLog(selectedFile ? "Avvio build cloud da ZIP (GitHub Actions)..." : "Avvio build cloud da URL (GitHub Actions)...");
+
     try {
+      const fd = new FormData();
+      fd.append('appName', appName);
+      fd.append('appId', appId);
+      fd.append('url', url || '');
+      fd.append('branch', 'main');
+      fd.append('token', githubToken);
+      fd.append('repo', githubRepo);
+      if (selectedFile) fd.append('file', selectedFile);
+
       const response = await fetch('/api/github-build', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          token: githubToken, 
-          repo: githubRepo,
-          appName,
-          appId,
-          url
-        }),
+        body: fd,
       });
 
-      if (!response.ok) throw new Error("Errore durante l'invio della build");
-      
-      addLog("Build Cloud avviata! Monitora la tab Actions su GitHub.");
-      // In un'app reale qui faremmo il polling dell'API di GitHub
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Errore durante l'invio della build");
+
+      setCloudRunId(data.runId || null);
+      setCloudRunUrl(data.runUrl || null);
+      addLog(`Build avviata (${data.mode || 'cloud'}).`);
+      if (data.runUrl) addLog(`Run: ${data.runUrl}`);
+      if (data.runId) {
+        setCloudBuildStatus('building');
+        addLog("Attendo il completamento per abilitare il download dell'APK...");
+        // poll finché la run è completata
+        let done = false; let tries = 0;
+        while (!done && tries < 60) {
+          await new Promise((r) => setTimeout(r, 10000));
+          done = await pollCloudStatus(data.runId);
+          tries++;
+        }
+        if (!done && cloudBuildStatus === 'building') setCloudBuildStatus('building');
+      } else {
+        addLog("Controlla la tab Actions di GitHub per scaricare l'APK.");
+      }
     } catch (error: any) {
       addLog(`ERRORE CLOUD: ${error.message}`);
       setCloudBuildStatus('failed');
@@ -601,13 +689,36 @@ export default function Dashboard() {
                     </a>
                     <button 
                       onClick={triggerCloudBuild}
-                      disabled={cloudBuildStatus === 'running'}
+                      disabled={cloudBuildStatus === 'dispatching' || cloudBuildStatus === 'building'}
                       className="flex items-center justify-center gap-2 bg-primary text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-600 transition-all disabled:opacity-50"
                     >
                       <Cpu size={20} />
-                      {cloudBuildStatus === 'running' ? 'Compilazione Cloud...' : 'Genera APK/IPA (GitHub)'}
+                      {cloudBuildStatus === 'dispatching' ? 'Invio in corso...' : cloudBuildStatus === 'building' ? 'Compilazione Cloud...' : 'Genera APK (GitHub)'}
                     </button>
                   </div>
+
+                  {(cloudBuildStatus !== 'idle') && (
+                    <div className="mt-4 p-4 rounded-xl bg-gray-50 border border-gray-100 text-sm">
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <span className="font-semibold text-gray-700">
+                          {cloudBuildStatus === 'dispatching' && '⏳ Invio build a GitHub...'}
+                          {cloudBuildStatus === 'building' && '⚙️ Compilazione su GitHub Actions...'}
+                          {cloudBuildStatus === 'success' && '✅ APK pronto!'}
+                          {cloudBuildStatus === 'failed' && '❌ Build fallita (controlla i log).'}
+                        </span>
+                        {cloudRunUrl && (
+                          <a href={cloudRunUrl} target="_blank" rel="noreferrer" className="text-primary font-medium hover:underline">
+                            Apri run su GitHub ↗
+                          </a>
+                        )}
+                        {apkReady && (
+                          <button onClick={downloadApk} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-green-700 transition-all">
+                            <Download size={16} /> Scarica APK
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="bg-white p-12 rounded-3xl border border-gray-100 shadow-sm flex flex-col items-center text-center">
