@@ -111,7 +111,8 @@ export default function Dashboard() {
       const fd = new FormData();
       fd.append('appName', appName);
       fd.append('appId', appId);
-      fd.append('url', url || '');
+      const cleanUrl = url && !/^https?:\/\//i.test(url) ? 'https://' + url : (url || '');
+      fd.append('url', cleanUrl);
       fd.append('branch', 'main');
       if (auth.token) fd.append('token', auth.token);
       if (auth.repo) fd.append('repo', auth.repo);
@@ -755,9 +756,16 @@ export default function Dashboard() {
                 </div>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <DownloadCard platform="Android" format="APK / AAB" version="via GitHub Actions" />
-                <DownloadCard platform="iOS" format="IPA / Xcode" version="workflow separato (simulatore)" />
+              <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 rounded-2xl bg-green-50 text-green-600">
+                    <Smartphone size={24} />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-gray-900">Android — APK</h4>
+                    <p className="text-xs text-gray-500">Compilato tramite GitHub Actions, installabile via sideload. iOS non è ancora disponibile in questo servizio.</p>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -799,21 +807,3 @@ function SidebarItem({ icon, label, active, onClick }: any) {
   );
 }
 
-function DownloadCard({ platform, format, version }: any) {
-  return (
-    <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between">
-      <div className="flex items-center gap-4">
-        <div className={`p-3 rounded-2xl ${platform === 'Android' ? 'bg-green-50 text-green-600' : 'bg-gray-50 text-gray-900'}`}>
-          <Smartphone size={24} />
-        </div>
-        <div>
-          <h4 className="font-bold text-gray-900">{platform}</h4>
-          <p className="text-xs text-gray-500">{format} • v{version}</p>
-        </div>
-      </div>
-      <button className="p-3 bg-gray-50 rounded-2xl hover:bg-gray-100 text-gray-700 transition-colors">
-        <Download size={20} />
-      </button>
-    </div>
-  );
-}
