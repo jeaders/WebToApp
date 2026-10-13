@@ -31,7 +31,7 @@ permissions:
 jobs:
   build-android:
     name: Build Android APK
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       APP_NAME: ${{ inputs.app_name }}
       APP_ID: ${{ inputs.app_id }}
@@ -39,7 +39,7 @@ jobs:
       SITE_ZIP: ${{ inputs.site_zip }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Validate inputs
         run: |
@@ -51,12 +51,19 @@ jobs:
           if [ -n "$SITE_ZIP" ]; then echo "Modalità: ZIP -> $SITE_ZIP"; else echo "Modalità: URL -> $WEB_URL"; fi
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
 
       - name: Install dependencies
         run: npm install
+
+      - name: Use latest Capacitor 8.x (compatibilità Android moderna)
+        run: |
+          # La lock blocca Capacitor 8.1.0 che crasha su Android 15/16 recenti.
+          # Forziamo l'ultima 8.x (validata) senza alterare i file del repo.
+          npm install --no-save @capacitor/core@8.5.3 @capacitor/cli@8.5.3 @capacitor/android@8.5.3
+          npx cap --version
 
       - name: Prepare web assets
         run: |
@@ -171,7 +178,7 @@ jobs:
           '
 
       - name: Setup Java 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "21"
