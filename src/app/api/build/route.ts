@@ -3,6 +3,14 @@ import { prepareBuild } from '@/lib/builder';
 import path from 'path';
 import fs from 'fs';
 
+// Il builder "sorgenti locali" scrive su disco (temp_uploads, public/downloads).
+// Su deploy serverless (es. Netlify) il filesystem è di sola lettura/temporaneo,
+// quindi questa feature non è disponibile: su quelle piattaforme si usa solo
+// il percorso GitHub Actions (che produce l'APK).
+const IS_SERVERLESS = Boolean(
+  process.env.NETLIFY || process.env.AWS_REGION || process.env.VERCEL || process.env.NETLIFY_FUNCTION
+);
+
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
@@ -14,6 +22,16 @@ export async function POST(req: NextRequest) {
 
     if (!appName || !appId) {
       return NextResponse.json({ error: 'Missing appName or appId' }, { status: 400 });
+    }
+
+    if (IS_SERVERLESS) {
+      return NextResponse.json(
+        {
+          error:
+            'La generazione dello ZIP sorgente in locale non è disponibile su questo deploy (ambiente serverless). Usa "Genera APK (GitHub)" dalla tab Download.',
+        },
+        { status: 501 }
+      );
     }
 
     let zipPath: string | undefined;
