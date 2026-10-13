@@ -1,0 +1,12 @@
+# Netlify ospita SOLO la dashboard Next.js e le API che avviano la build.
+# L'APK viene compilato da GitHub Actions, non da Netlify.
+# Nessun segreto è committato qui: il token GitHub lo inserisce l'utente a runtime.
+
+[build]
+  command = "npm run build"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
