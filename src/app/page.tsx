@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Upload, 
   Settings, 
@@ -37,19 +37,33 @@ export default function Dashboard() {
   const [downloadLink, setDownloadLink] = useState<string | null>(null);
   const [githubToken, setGithubToken] = useState('');
   const [githubRepo, setGithubRepo] = useState('');
+  const [serviceConfigured, setServiceConfigured] = useState<boolean | null>(null);
   const [cloudBuildStatus, setCloudBuildStatus] = useState<'idle' | 'dispatching' | 'building' | 'success' | 'failed'>('idle');
   const [cloudRunId, setCloudRunId] = useState<number | null>(null);
   const [cloudRunUrl, setCloudRunUrl] = useState<string | null>(null);
   const [apkReady, setApkReady] = useState(false);
 
+  // La build cloud è preconfigurata dal gestore del sito? (token lato server)
+  useEffect(() => {
+    let alive = true;
+    fetch('/api/config')
+      .then((r) => r.json())
+      .then((d) => { if (alive) setServiceConfigured(Boolean(d?.configured)); })
+      .catch(() => { if (alive) setServiceConfigured(false); });
+    return () => { alive = false; };
+  }, []);
+
+  const needsManualAuth = serviceConfigured === false;
+
   const downloadApk = async () => {
     if (!cloudRunId) return;
     addLog("Download APK in corso...");
+    const auth = needsManualAuth ? { token: githubToken, repo: githubRepo } : {};
     try {
       const res = await fetch('/api/cloud-artifact', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: githubToken, repo: githubRepo, runId: cloudRunId }),
+        body: JSON.stringify({ ...auth, runId: cloudRunId }),
       });
       const ct = res.headers.get('content-type') || '';
       if (ct.includes('application/json')) {
@@ -73,7 +87,7 @@ export default function Dashboard() {
   };
 
   const triggerCloudBuild = async () => {
-    if (!githubToken || !githubRepo) {
+    if (needsManualAuth && (!githubToken || !githubRepo)) {
       alert("Configura il tuo GitHub Token e Repository nelle impostazioni per la build cloud!");
       setActiveTab('settings');
       return;
@@ -90,6 +104,7 @@ export default function Dashboard() {
     setCloudRunUrl(null);
     addLog(selectedFile ? "Avvio build cloud da ZIP (GitHub Actions)..." : "Avvio build cloud da URL (GitHub Actions)...");
 
+    const auth = needsManualAuth ? { token: githubToken, repo: githubRepo } : {};
     const startedMs = Date.now() - 5000; // tolleranza: ignora run create prima del click
 
     try {
@@ -98,8 +113,8 @@ export default function Dashboard() {
       fd.append('appId', appId);
       fd.append('url', url || '');
       fd.append('branch', 'main');
-      fd.append('token', githubToken);
-      fd.append('repo', githubRepo);
+      if (auth.token) fd.append('token', auth.token);
+      if (auth.repo) fd.append('repo', auth.repo);
       if (selectedFile) fd.append('file', selectedFile);
 
       const response = await fetch('/api/github-build', {
@@ -117,7 +132,7 @@ export default function Dashboard() {
         const r = await fetch('/api/cloud-latest', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token: githubToken, repo: githubRepo, branch }),
+          body: JSON.stringify({ ...auth, branch }),
         });
         return r.json().catch(() => ({}));
       };
@@ -592,34 +607,43 @@ export default function Dashboard() {
               <div className="pt-8 border-t border-gray-100">
                 <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
                   <Globe size={20} className="text-purple-500" />
-                  GitHub Cloud Compiler (Obbligatorio per APK/IPA)
+                  Build Cloud (GitHub Actions)
                 </h3>
                 <div className="bg-purple-50/50 p-6 rounded-2xl border border-purple-100 space-y-4">
-                  <p className="text-sm text-purple-800">
-                    Per generare file APK e IPA installabili, inserisci il tuo <b>GitHub Personal Access Token</b> e il nome del <b>Repository</b>.
-                  </p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-purple-700">GitHub Token (con permessi 'workflow')</label>
-                      <input 
-                        type="password" 
-                        value={githubToken}
-                        onChange={(e) => setGithubToken(e.target.value)}
-                        placeholder="ghp_xxxxxxxxxxxx" 
-                        className="w-full p-3 bg-white border border-purple-200 rounded-xl text-sm" 
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-purple-700">Repository (utente/repo)</label>
-                      <input 
-                        type="text" 
-                        value={githubRepo}
-                        onChange={(e) => setGithubRepo(e.target.value)}
-                        placeholder="tuo-utente/tuo-repo" 
-                        className="w-full p-3 bg-white border border-purple-200 rounded-xl text-sm" 
-                      />
-                    </div>
-                  </div>
+                  {serviceConfigured === true && (
+                    <p className="text-sm text-purple-800">
+                      ✅ <b>Build cloud già configurata dal gestore del sito.</b> Ti basta inserire l'URL (o uno ZIP) e premere <b>Genera APK (GitHub)</b>. Non serve alcun token.
+                    </p>
+                  )}
+                  {serviceConfigured === false && (
+                    <>
+                      <p className="text-sm text-purple-800">
+                        Questo sito non ha una build cloud preconfigurata. Per usarla, inserisci il tuo <b>GitHub Personal Access Token</b> (scope <code>workflow</code> e <code>repo</code>) e il <b>Repository</b> nel formato <code>utente/repo</code>.
+                      </p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-purple-700">GitHub Token (scope 'workflow')</label>
+                          <input 
+                            type="password" 
+                            value={githubToken}
+                            onChange={(e) => setGithubToken(e.target.value)}
+                            placeholder="ghp_xxxxxxxxxxxx" 
+                            className="w-full p-3 bg-white border border-purple-200 rounded-xl text-sm" 
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-purple-700">Repository (utente/repo)</label>
+                          <input 
+                            type="text" 
+                            value={githubRepo}
+                            onChange={(e) => setGithubRepo(e.target.value)}
+                            placeholder="tuo-utente/tuo-repo" 
+                            className="w-full p-3 bg-white border border-purple-200 rounded-xl text-sm" 
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 
