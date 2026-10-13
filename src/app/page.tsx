@@ -42,34 +42,6 @@ export default function Dashboard() {
   const [cloudRunUrl, setCloudRunUrl] = useState<string | null>(null);
   const [apkReady, setApkReady] = useState(false);
 
-  const pollCloudStatus = async (runId: number) => {
-    try {
-      const res = await fetch('/api/cloud-status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: githubToken, repo: githubRepo, runId }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Errore stato');
-      if (data.status === 'completed') {
-        if (data.conclusion === 'success') {
-          setCloudBuildStatus('success');
-          setApkReady(true);
-          addLog("✅ Build completata! APK pronto per il download.");
-        } else {
-          setCloudBuildStatus('failed');
-          addLog(`❌ Build terminata con esito: ${data.conclusion || 'sconosciuto'}.`);
-        }
-        return true;
-      }
-      addLog(`⏳ Stato build: ${data.status}...`);
-      return false;
-    } catch (error: any) {
-      addLog(`Errore polling: ${error.message}`);
-      return false;
-    }
-  };
-
   const downloadApk = async () => {
     if (!cloudRunId) return;
     addLog("Download APK in corso...");
@@ -118,6 +90,8 @@ export default function Dashboard() {
     setCloudRunUrl(null);
     addLog(selectedFile ? "Avvio build cloud da ZIP (GitHub Actions)..." : "Avvio build cloud da URL (GitHub Actions)...");
 
+    const startedMs = Date.now() - 5000; // tolleranza: ignora run create prima del click
+
     try {
       const fd = new FormData();
       fd.append('appName', appName);
@@ -132,27 +106,46 @@ export default function Dashboard() {
         method: 'POST',
         body: fd,
       });
-
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || "Errore durante l'invio della build");
 
-      setCloudRunId(data.runId || null);
-      setCloudRunUrl(data.runUrl || null);
-      addLog(`Build avviata (${data.mode || 'cloud'}).`);
-      if (data.runUrl) addLog(`Run: ${data.runUrl}`);
-      if (data.runId) {
-        setCloudBuildStatus('building');
-        addLog("Attendo il completamento per abilitare il download dell'APK...");
-        // poll finché la run è completata
-        let done = false; let tries = 0;
-        while (!done && tries < 60) {
-          await new Promise((r) => setTimeout(r, 10000));
-          done = await pollCloudStatus(data.runId);
-          tries++;
+      const branch = data.branch || 'main';
+      addLog(`Build avviata (${data.mode || 'cloud'}). Attendo il completamento...`);
+      setCloudBuildStatus('building');
+
+      const latest = async () => {
+        const r = await fetch('/api/cloud-latest', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: githubToken, repo: githubRepo, branch }),
+        });
+        return r.json().catch(() => ({}));
+      };
+
+      let finished = false;
+      for (let i = 0; i < 70 && !finished; i++) {
+        await new Promise((r) => setTimeout(r, 8000));
+        const l = await latest();
+        if (!l.runId) continue;
+        if (l.createdAt && Date.parse(l.createdAt) < startedMs) continue; // run precedente
+        setCloudRunId(l.runId);
+        if (l.htmlUrl) setCloudRunUrl(l.htmlUrl);
+        if (l.status === 'completed') {
+          finished = true;
+          if (l.conclusion === 'success') {
+            setCloudBuildStatus('success');
+            setApkReady(true);
+            addLog("✅ Build completata! APK pronto per il download.");
+          } else {
+            setCloudBuildStatus('failed');
+            addLog(`❌ Build terminata con esito: ${l.conclusion || 'sconosciuto'}.`);
+          }
+        } else {
+          addLog(`⏳ Run #${l.runNumber}: ${l.status}...`);
         }
-        if (!done && cloudBuildStatus === 'building') setCloudBuildStatus('building');
-      } else {
-        addLog("Controlla la tab Actions di GitHub per scaricare l'APK.");
+      }
+      if (!finished && cloudBuildStatus === 'building') {
+        addLog("Build ancora in corso o polling terminato: trovi l'APK anche nella tab Actions di GitHub.");
       }
     } catch (error: any) {
       addLog(`ERRORE CLOUD: ${error.message}`);
@@ -670,67 +663,77 @@ export default function Dashboard() {
 
           {activeTab === 'download' && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              {downloadLink ? (
-                <div className="bg-white p-8 rounded-3xl border border-green-100 shadow-sm flex flex-col items-center text-center">
-                  <div className="bg-green-50 p-4 rounded-full mb-4">
-                    <CheckCircle2 size={40} className="text-green-500" />
+              {/* Build cloud (sempre disponibile) — è il percorso che produce l'APK */}
+              <div className="bg-white p-8 rounded-3xl border border-blue-100 shadow-sm">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                  <div>
+                    <h3 className="text-lg font-bold mb-1 flex items-center gap-2">
+                      <Cpu size={20} className="text-primary" /> Genera APK con GitHub Actions
+                    </h3>
+                    <p className="text-sm text-gray-500 max-w-xl">
+                      Compila la tua app (da <b>URL</b> o <b>ZIP</b>) sull'infrastruttura di GitHub. Configura token e repository nelle{' '}
+                      <button onClick={() => setActiveTab('settings')} className="text-primary font-medium hover:underline">Impostazioni</button>.
+                      Al termine scarichi l'APK direttamente da qui.
+                    </p>
                   </div>
-                  <h3 className="text-xl font-bold mb-2">App Pronta per il Download!</h3>
-                  <p className="text-gray-500 mb-6 max-w-md">Abbiamo generato i sorgenti nativi della tua app. Puoi scaricare lo ZIP e caricarlo su GitHub per la build cloud o compilarlo localmente.</p>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-lg">
-                    <a 
-                      href={downloadLink} 
-                      download 
-                      className="flex items-center justify-center gap-2 bg-gray-100 text-gray-700 px-6 py-3 rounded-xl font-bold hover:bg-gray-200 transition-all"
-                    >
-                      <Download size={20} />
-                      Scarica Sorgenti ZIP
-                    </a>
-                    <button 
-                      onClick={triggerCloudBuild}
-                      disabled={cloudBuildStatus === 'dispatching' || cloudBuildStatus === 'building'}
-                      className="flex items-center justify-center gap-2 bg-primary text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-600 transition-all disabled:opacity-50"
-                    >
-                      <Cpu size={20} />
-                      {cloudBuildStatus === 'dispatching' ? 'Invio in corso...' : cloudBuildStatus === 'building' ? 'Compilazione Cloud...' : 'Genera APK (GitHub)'}
-                    </button>
-                  </div>
+                  <button
+                    onClick={triggerCloudBuild}
+                    disabled={cloudBuildStatus === 'dispatching' || cloudBuildStatus === 'building'}
+                    className="shrink-0 flex items-center justify-center gap-2 bg-primary text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-600 transition-all disabled:opacity-50"
+                  >
+                    <Cpu size={20} />
+                    {cloudBuildStatus === 'dispatching' ? 'Invio in corso...' : cloudBuildStatus === 'building' ? 'Compilazione Cloud...' : 'Genera APK (GitHub)'}
+                  </button>
+                </div>
 
-                  {(cloudBuildStatus !== 'idle') && (
-                    <div className="mt-4 p-4 rounded-xl bg-gray-50 border border-gray-100 text-sm">
-                      <div className="flex items-center justify-between gap-3 flex-wrap">
-                        <span className="font-semibold text-gray-700">
-                          {cloudBuildStatus === 'dispatching' && '⏳ Invio build a GitHub...'}
-                          {cloudBuildStatus === 'building' && '⚙️ Compilazione su GitHub Actions...'}
-                          {cloudBuildStatus === 'success' && '✅ APK pronto!'}
-                          {cloudBuildStatus === 'failed' && '❌ Build fallita (controlla i log).'}
-                        </span>
-                        {cloudRunUrl && (
-                          <a href={cloudRunUrl} target="_blank" rel="noreferrer" className="text-primary font-medium hover:underline">
-                            Apri run su GitHub ↗
-                          </a>
-                        )}
-                        {apkReady && (
-                          <button onClick={downloadApk} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-green-700 transition-all">
-                            <Download size={16} /> Scarica APK
-                          </button>
-                        )}
-                      </div>
+                {(cloudBuildStatus !== 'idle') && (
+                  <div className="mt-4 p-4 rounded-xl bg-gray-50 border border-gray-100 text-sm">
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <span className="font-semibold text-gray-700">
+                        {cloudBuildStatus === 'dispatching' && '⏳ Invio build a GitHub...'}
+                        {cloudBuildStatus === 'building' && '⚙️ Compilazione su GitHub Actions...'}
+                        {cloudBuildStatus === 'success' && '✅ APK pronto!'}
+                        {cloudBuildStatus === 'failed' && '❌ Build fallita (controlla i log).'}
+                      </span>
+                      {cloudRunUrl && (
+                        <a href={cloudRunUrl} target="_blank" rel="noreferrer" className="text-primary font-medium hover:underline">
+                          Apri run su GitHub ↗
+                        </a>
+                      )}
+                      {apkReady && (
+                        <button onClick={downloadApk} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-green-700 transition-all">
+                          <Download size={16} /> Scarica APK
+                        </button>
+                      )}
                     </div>
-                  )}
+                  </div>
+                )}
+              </div>
+
+              {/* Sorgente locale (solo in dev / deploy con filesystem scrivibile) */}
+              {downloadLink ? (
+                <div className="bg-white p-6 rounded-3xl border border-green-100 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-lg font-bold">Sorgenti progetto (ZIP)</h3>
+                    <p className="text-sm text-gray-500">Progetto Capacitor generato, compilabile anche in locale.</p>
+                  </div>
+                  <a
+                    href={downloadLink}
+                    download
+                    className="flex items-center justify-center gap-2 bg-gray-100 text-gray-700 px-6 py-3 rounded-xl font-bold hover:bg-gray-200 transition-all"
+                  >
+                    <Download size={20} /> Scarica Sorgenti ZIP
+                  </a>
                 </div>
               ) : (
-                <div className="bg-white p-12 rounded-3xl border border-gray-100 shadow-sm flex flex-col items-center text-center">
-                  <Download size={48} className="text-gray-200 mb-4" />
-                  <h3 className="text-lg font-bold text-gray-400">Nessun download disponibile</h3>
-                  <p className="text-sm text-gray-400">Avvia una build dalla dashboard per generare la tua app.</p>
+                <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm text-sm text-gray-500">
+                  La generazione dello <b>ZIP sorgente locale</b> è disponibile solo in sviluppo (scrive su disco). Su deploy serverless (es. Netlify) è disattivata: usa la <b>build cloud con GitHub Actions</b> qui sopra per ottenere l'APK.
                 </div>
               )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <DownloadCard platform="Android" format="APK / AAB" version="Cloud Build Required" />
-                <DownloadCard platform="iOS" format="IPA / Xcode" version="Cloud Build Required" />
+                <DownloadCard platform="Android" format="APK / AAB" version="via GitHub Actions" />
+                <DownloadCard platform="iOS" format="IPA / Xcode" version="workflow separato (simulatore)" />
               </div>
             </div>
           )}
