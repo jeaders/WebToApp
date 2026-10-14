@@ -50,11 +50,18 @@ _private*
 PRIVATE*
 private.local.*
 
+# Android signing keystore — MAI pubblico
+*.local.jks
+android-keystore.local.jks
+*.keystore
+*.jks
+
 # Capacitor / build generati (creati a runtime dal workflow, per-build e per-utente)
 /android
 /ios
 /www
 /builds
+/apk
 /capacitor.config.json
 /capacitor.config.ts
 /capacitor.config.js
