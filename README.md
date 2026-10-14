@@ -113,6 +113,30 @@ iOS is **not** part of this service yet. A distributable `.ipa` requires a paid 
 
 ---
 
+## 🔏 Release signing & app icons
+
+The APK is **signed with your own release key** (so it installs as a trusted app) and gets **custom icons + splash screen**.
+
+**Icons / splash:** the source artwork lives in [`assets/icon.png`](./assets/icon.png) (1024×1024) and [`assets/splash.png`](./assets/splash.png) (2732×2732). They are rendered into all Android densities automatically via `@capacitor/assets` at build time. To use your own logo, just replace those two files and rebuild.
+
+**Release signing (one-time):** create these **GitHub Actions secrets**
+(*repo → Settings → Secrets and variables → Actions → New repository secret*):
+
+| Secret                     | Value                                             |
+| -------------------------- | ------------------------------------------------- |
+| `ANDROID_KEYSTORE_BASE64`  | base64 of your `.jks`/`.keystore` file            |
+| `ANDROID_KEY_ALIAS`        | key alias (e.g. `webtoapp`)                       |
+| `ANDROID_KEYSTORE_PASSWORD`| keystore password                                 |
+| `ANDROID_KEY_PASSWORD`     | key password                                      |
+
+When these secrets are present, the workflow builds a **signed release APK**. If they are **not** set, it safely falls back to the debug build (so the pipeline never breaks).
+
+> 🔐 **Keep your keystore and passwords safe.** They are stored only locally in the git-ignored file `_private.local.md` (and `android-keystore.local.jks`). You need the **same** key to publish updates to the Play Store — losing it means you can't update an already-published app.
+>
+> ℹ️ **Important note about the install warning:** a properly signed APK removes the "file may be harmful / unknown app" risk during install. Google **Play Protect** may still show a generic warning for *brand-new* sideloaded apps until the app gains reputation — this is normal for apps not distributed via the Play Store and is not related to signing.
+
+---
+
 ## 🔒 Security & privacy
 
 - The GitHub token lives **only on the server** (environment variable) and is **never** sent to the browser.
