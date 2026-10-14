@@ -4,12 +4,12 @@
 
 ### Turn any website into a native Android app — in one click.
 
-[![License](https://img.shields.io/badge/License-Proprietary-red.svg)](./LICENSE)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Android-green.svg)](#)
 [![Build](https://img.shields.io/badge/Build-GitHub%20Actions-blue.svg)](#)
-[![Author](https://img.shields.io/badge/Author-Alex%20Mirici-black.svg)](#)
+[![Author](https://img.shields.io/badge/Author-Alex%20Mirici-black.svg)](https://alexmirici.netlify.app)
 
-**© 2026 Alex Mirici — Web Developer. All rights reserved.**
+**Copyright © 2026 Alex Mirici — Web Developer.**
 
 </div>
 
@@ -153,8 +153,8 @@ src/lib/builder.ts                   # Capacitor project generator (local)
 
 ## 📄 License
 
-This project is **proprietary** software. See [LICENSE](./LICENSE).
+This project is released under the **MIT License**. See [LICENSE](./LICENSE).
 
-**Copyright © 2026 Alex Mirici — Web Developer. All rights reserved.**
+**Copyright © 2026 Alex Mirici — Web Developer.**
 
-This license applies to the original source code authored by the Licensor. Third-party open-source dependencies (Next.js, React, Capacitor, Tailwind CSS, Octokit, AdmZip, …) remain governed by their own respective licenses.
+Third-party open-source dependencies (Next.js, React, Capacitor, Tailwind CSS, Octokit, AdmZip, …) remain governed by their own respective licenses.
