@@ -44,6 +44,12 @@ next-env.d.ts
 *.secret
 secrets.json
 
+# private local notes / secrets — MAI pubblici
+*.local.md
+_private*
+PRIVATE*
+private.local.*
+
 # Capacitor / build generati (creati a runtime dal workflow, per-build e per-utente)
 /android
 /ios
