@@ -237,19 +237,29 @@ jobs:
               "$SIGNER" sign --ks release.keystore --ks-key-alias "$ANDROID_KEY_ALIAS" \
                 --ks-pass "env:ANDROID_KEYSTORE_PASSWORD" --key-pass "env:ANDROID_KEY_PASSWORD" \
                 --out ../apk/app-release.apk app-release-aligned.apk
-              rm -f release.keystore app-release-aligned.apk
               echo "APK release firmato: ../apk/app-release.apk"
+              # AAB firmato per la pubblicazione sul Play Store
+              ./gradlew bundleRelease --no-daemon
+              AAB="$(ls app/build/outputs/bundle/release/*.aab 2>/dev/null | head -1)"
+              if [ -n "$AAB" ]; then
+                "$JAVA_HOME/bin/jarsigner" -keystore release.keystore \
+                  -storepass "$ANDROID_KEYSTORE_PASSWORD" -keypass "$ANDROID_KEY_PASSWORD" \
+                  -sigalg SHA256withRSA -digestalg SHA-256 \
+                  -signedjar ../apk/app-release.aab "$AAB" "$ANDROID_KEY_ALIAS"
+                echo "AAB firmato: ../apk/app-release.aab"
+              fi
             fi
+            rm -f release.keystore app-release-aligned.apk
           else
             echo "Segreti di firma assenti: build di debug (fallback, come prima)."
             ./gradlew assembleDebug --no-daemon
             cp app/build/outputs/apk/debug/app-debug.apk ../apk/app-debug.apk
           fi
 
-      - name: Upload APK
+      - name: Upload APK / AAB
         uses: actions/upload-artifact@v4
         with:
           name: app-${{ github.run_id }}
-          path: apk/*.apk
+          path: apk/*
           if-no-files-found: error
           retention-days: 14
