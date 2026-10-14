@@ -129,7 +129,7 @@ The APK is **signed with your own release key** (so it installs as a trusted app
 | `ANDROID_KEYSTORE_PASSWORD`| keystore password                                 |
 | `ANDROID_KEY_PASSWORD`     | key password                                      |
 
-When these secrets are present, the workflow builds a **signed release APK**. If they are **not** set, it safely falls back to the debug build (so the pipeline never breaks).
+When these secrets are present, the workflow builds a **signed release APK** *and* a **signed release AAB** (`app-release.aab`, the format required to publish on the Google Play Store). If they are **not** set, it safely falls back to the debug build (so the pipeline never breaks).
 
 > 🔐 **Keep your keystore and passwords safe.** They are stored only locally in the git-ignored file `_private.local.md` (and `android-keystore.local.jks`). You need the **same** key to publish updates to the Play Store — losing it means you can't update an already-published app.
 >
