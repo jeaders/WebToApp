@@ -2,8 +2,11 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "WebToApp - Converti il tuo sito in App Nativa",
-  description: "Trasforma istantaneamente il tuo progetto web in un'app Android e iOS professionale.",
+  title: "WebToApp — Convert your website into a native Android app",
+  description: "Turn any website or HTML/CSS/JS project into an installable Android APK with one click. Built by Alex Mirici — Web Developer.",
+  authors: [{ name: "Alex Mirici", url: "https://alexmirici.dev" }],
+  creator: "Alex Mirici",
+  publisher: "Alex Mirici",
 };
 
 export default function RootLayout({
