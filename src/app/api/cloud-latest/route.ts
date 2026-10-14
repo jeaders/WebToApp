@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { octo, serverConfig, getRun, listRunArtifacts } from '@/lib/github';
+import { msg } from '@/lib/messages';
 
 export const runtime = 'nodejs';
 
@@ -7,16 +8,16 @@ const WORKFLOW_ID = 'build.yml';
 
 export async function POST(req: NextRequest) {
   try {
-    const { token: bodyToken, repo: bodyRepo, branch } = await req.json();
+    const { token: bodyToken, repo: bodyRepo, branch, lang } = await req.json();
     const server = serverConfig();
     const token = bodyToken || server.token;
     const repo = bodyRepo || server.repo;
     if (!token || !repo || !branch) {
-      return NextResponse.json({ error: 'Parametri mancanti (token, repo, branch).' }, { status: 400 });
+      return NextResponse.json({ error: msg(lang, 'missingParams') }, { status: 400 });
     }
     const [owner, repoName] = String(repo).split('/');
     if (!owner || !repoName) {
-      return NextResponse.json({ error: 'Formato repo non valido.' }, { status: 400 });
+      return NextResponse.json({ error: msg(lang, 'badRepo') }, { status: 400 });
     }
     const octokit = octo(token);
 
@@ -58,7 +59,7 @@ export async function POST(req: NextRequest) {
   } catch (error: any) {
     console.error('cloud-latest error:', error);
     return NextResponse.json(
-      { error: error?.response?.data?.message || error?.message || 'Errore recupero run' },
+      { error: error?.response?.data?.message || error?.message || 'Error fetching run' },
       { status: 500 }
     );
   }
