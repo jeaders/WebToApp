@@ -282,6 +282,11 @@ export default function Dashboard() {
             <p className="text-xs text-blue-700">Build illimitati per Android e iOS (Test Mode).</p>
           </div>
         </div>
+
+        <div className="px-4 pb-4 text-[11px] text-gray-400 text-center leading-relaxed">
+          © 2026 <a href="https://alexmirici.dev" className="hover:text-gray-600">Alex Mirici</a><br />
+          Web Developer · All rights reserved
+        </div>
       </aside>
 
       {/* Main Content */}
