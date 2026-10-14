@@ -39,8 +39,8 @@ export default function Dashboard() {
   const [viewportHeight, setViewportHeight] = useState(667);
   const [isBuilding, setIsBuilding] = useState(false);
   const [buildProgress, setBuildProgress] = useState(0);
-  const [appName, setAppName] = useState('Mia Fantastica App');
-  const [appId, setAppId] = useState('com.tuonome.app');
+  const [appName, setAppName] = useState('My Awesome App');
+  const [appId, setAppId] = useState('com.yourname.app');
   const [url, setUrl] = useState('');
   const [primaryColor, setPrimaryColor] = useState('#0070f3');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -79,7 +79,7 @@ export default function Dashboard() {
       const res = await fetch('/api/cloud-artifact', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...auth, runId: cloudRunId }),
+        body: JSON.stringify({ ...auth, runId: cloudRunId, lang }),
       });
       const ct = res.headers.get('content-type') || '';
       if (ct.includes('application/json')) {
@@ -130,6 +130,7 @@ export default function Dashboard() {
       const cleanUrl = url && !/^https?:\/\//i.test(url) ? 'https://' + url : (url || '');
       fd.append('url', cleanUrl);
       fd.append('branch', 'main');
+      fd.append('lang', lang);
       if (auth.token) fd.append('token', auth.token);
       if (auth.repo) fd.append('repo', auth.repo);
       if (selectedFile) fd.append('file', selectedFile);
@@ -149,7 +150,7 @@ export default function Dashboard() {
         const r = await fetch('/api/cloud-latest', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...auth, branch }),
+          body: JSON.stringify({ ...auth, branch, lang }),
         });
         return r.json().catch(() => ({}));
       };
@@ -204,6 +205,7 @@ export default function Dashboard() {
       formData.append('appId', appId);
       formData.append('url', url);
       formData.append('primaryColor', primaryColor);
+      formData.append('lang', lang);
       if (selectedFile) formData.append('file', selectedFile);
 
       addLog(t('log.sending2'));
