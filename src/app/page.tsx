@@ -284,8 +284,8 @@ export default function Dashboard() {
         </div>
 
         <div className="px-4 pb-4 text-[11px] text-gray-400 text-center leading-relaxed">
-          © 2026 <a href="https://alexmirici.dev" className="hover:text-gray-600">Alex Mirici</a><br />
-          Web Developer · All rights reserved
+          © 2026 <a href="https://alexmirici.netlify.app" target="_blank" rel="noreferrer" className="hover:text-gray-600">Alex Mirici</a><br />
+          Web Developer · MIT License
         </div>
       </aside>
 
