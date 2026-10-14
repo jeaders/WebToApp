@@ -1,41 +1,21 @@
-Copyright (c) 2026 Alex Mirici — Web Developer. All rights reserved.
+MIT License
 
-PROPRIETARY SOFTWARE LICENSE
+Copyright (c) 2026 Alex Mirici
 
-This software and its source code, documentation, design, assets, and any
-associated materials (collectively, the "Software"), hosted at
-https://github.com/jeaders/WebToApp, are the confidential and proprietary
-property of Alex Mirici ("Web Developer", the "Licensor").
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-1. OWNERSHIP
-   The Software is licensed, not sold. All title, ownership, and intellectual
-   property rights in and to the Software remain exclusively with the Licensor.
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-2. RESTRICTIONS
-   No permission is granted to any person or entity to use, copy, modify, merge,
-   publish, distribute, sublicense, reverse engineer, and/or sell copies of the
-   Software, in whole or in part, without the prior express written permission of
-   the Licensor. Unauthorized use, reproduction, or distribution of the Software
-   is strictly prohibited and may result in civil and criminal penalties.
-
-3. CONFIDENTIAL INFORMATION
-   The Software may contain trade secrets and confidential information. You agree
-   not to disclose any part of the Software to any third party without written
-   authorization from the Licensor.
-
-4. NO WARRANTY
-   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-   FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
-   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM,
-   OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-   SOFTWARE.
-
-5. THIRD-PARTY COMPONENTS
-   The Software depends on third-party open-source packages (for example Next.js,
-   React, Capacitor, Tailwind CSS, Octokit, and AdmZip), each of which remains
-   governed by its own respective license. This license applies only to the
-   original source code authored by the Licensor.
-
-Contact: hilliedmikerano@gmail.com
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
