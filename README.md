@@ -15,7 +15,7 @@
 
 ---
 
-WebToApp is a platform that converts any **website (URL)** or **static HTML/CSS/JS project (ZIP)** into an installable **Android APK** using [Capacitor](https://capacitorjs.com). The site runs inside a native **WebView**, so it works even with sites that block iframes. The APK is compiled on **GitHub Actions** (free for public repositories), and the dashboard is hosted on **Netlify**.
+WebToApp is a platform that converts any **website (URL)** or **static HTML/CSS/JS project (ZIP)** into an installable **Android APK** using [Capacitor](https://capacitorjs.com). The site runs inside a native **WebView**, so it works even with sites that block iframes. The APK is compiled on **GitHub Actions** (free for public repositories), and the dashboard is hosted on **Vercel** (recommended, free) or **Netlify**.
 
 ---
 
@@ -66,15 +66,16 @@ npm run dev
 
 So that visitors only need to paste a URL, configure the GitHub token **on the server** (never in the browser or in the repository).
 
-Create a **classic Personal Access Token** with scopes **`repo`** and **`workflow`**, then set these **environment variables** on Netlify
-(*Site settings → Build & deploy → Environment → Environment variables*, scope **All scopes**):
+Create a **classic Personal Access Token** with scopes **`repo`** and **`workflow`**, then set these **environment variables** on your host:
+- **Vercel:** *Project → Settings → Environment Variables*
+- **Netlify:** *Site settings → Build & deploy → Environment → Environment variables* (scope **All scopes**)
 
 | Variable                 | Value                                            |
 | ------------------------ | ------------------------------------------------ |
 | `WEBTOAPP_GITHUB_TOKEN`  | Your GitHub PAT (secret, server-only)            |
 | `WEBTOAPP_GITHUB_REPO`   | `jeaders/WebToApp` (or your `user/repo`)         |
 
-Then **redeploy** (*Deploys → Trigger deploy → Clear cache and deploy site*). Verify by opening `/api/config` — it should return `{"configured":true,...}`. From that point the dashboard shows *"Build cloud already configured"* and the token fields disappear.
+Then **redeploy**. Verify by opening `/api/config` — it should return `{"configured":true,...}`. From that point the dashboard shows *"Build cloud already configured"* and the token fields disappear.
 
 > 🔁 **Anti-abuse:** since any visitor can start a build on your account, the service enforces a limit (max **2 concurrent builds** and **40/hour**). Beyond that, builds are rejected with a "try later" message.
 
@@ -94,16 +95,23 @@ For local development you can copy `.env.example` to `.env` (already git-ignored
 
 ---
 
-## ☁️ Deployment on Netlify
+## ☁️ Deployment (dashboard hosting)
 
-- **Build command:** `npm run build` (set in `netlify.toml`).
-- **No build-time secrets:** the GitHub token is entered at runtime as an environment variable, never committed.
-- **Auto-deploy on every push:** link the repository in Netlify (Import from GitHub) — Netlify redeploys automatically on each push to `main`. Alternatively, create a **Build Hook** in Netlify and store its URL as the GitHub **Actions secret** `NETLIFY_BUILD_HOOK_URL`; the workflow `.github/workflows/netlify-deploy.yml` calls it on every push.
+The **APK/AAB compilation runs on GitHub Actions** and is independent of the dashboard host. The dashboard itself can be hosted on:
 
-**Serverless notes:**
+**Vercel (recommended, free Hobby plan):**
+1. [vercel.com](https://vercel.com) → **Add New → Project** → **Import `jeaders/WebToApp`** (authorize GitHub).
+2. Framework: **Next.js** (auto-detected). Build command `npm run build` (default).
+3. Add the environment variables (`WEBTOAPP_GITHUB_TOKEN`, `WEBTOAPP_GITHUB_REPO`).
+4. **Deploy.** Vercel **auto-deploys on every push to `main`**.
+
+**Netlify (auto-deploys too, but requires credits):**
+- The repo is already linked, so each push to `main` triggers a deploy automatically. ⚠️ If Netlify is **out of credits**, builds won't publish and the site stays on the last successful deploy — top up or wait for the monthly reset. Free alternative: Vercel.
+
+**Serverless notes (both hosts):**
 - ✅ The GitHub-Actions APK build works (URL and ZIP).
 - ⚠️ The local "source ZIP" generator is **disabled** on serverless (read-only filesystem); only the cloud build is available.
-- ⚡ API routes respond immediately (no long waits), so Netlify function timeouts are never hit.
+- ⚡ API routes respond immediately (no long waits), so host function timeouts are never hit.
 
 ---
 
