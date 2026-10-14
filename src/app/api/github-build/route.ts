@@ -8,6 +8,7 @@ import {
   dispatchWorkflow,
   recentRunStats,
 } from '@/lib/github';
+import { msg } from '@/lib/messages';
 
 export const runtime = 'nodejs';
 
@@ -36,6 +37,7 @@ export async function POST(req: NextRequest) {
     let url = '';
     let branch = 'main';
     let file: File | null = null;
+    let lang = 'en';
 
     if (ct.includes('multipart/form-data')) {
       const fd = await req.formData();
@@ -45,6 +47,7 @@ export async function POST(req: NextRequest) {
       appId = String(fd.get('appId') || '');
       url = String(fd.get('url') || '');
       branch = String(fd.get('branch') || 'main') || 'main';
+      lang = String(fd.get('lang') || 'en');
       const f = fd.get('file');
       if (f && typeof f === 'object' && 'arrayBuffer' in (f as any)) file = f as File;
     } else {
@@ -55,6 +58,7 @@ export async function POST(req: NextRequest) {
       appId = body.appId || '';
       url = body.url || '';
       branch = body.branch || 'main';
+      lang = body.lang || 'en';
     }
 
     // Default dalla configurazione server: il visitatore non deve inserire nulla.
@@ -65,20 +69,14 @@ export async function POST(req: NextRequest) {
     if (url && !/^https?:\/\//i.test(url)) url = 'https://' + url;
 
     if (!token || !repo) {
-      return NextResponse.json(
-        {
-          error:
-            'Servizio non configurato: manca WEBTOAPP_GITHUB_TOKEN / WEBTOAPP_GITHUB_REPO sul server.',
-        },
-        { status: 503 }
-      );
+      return NextResponse.json({ error: msg(lang, 'notConfigured') }, { status: 503 });
     }
     const parsed = parseRepo(repo);
     if (!parsed) {
-      return NextResponse.json({ error: 'Formato repo non valido. Usa "utente/repository".' }, { status: 400 });
+      return NextResponse.json({ error: msg(lang, 'badRepo') }, { status: 400 });
     }
     if (!file && !url) {
-      return NextResponse.json({ error: 'Inserisci un URL oppure carica uno ZIP.' }, { status: 400 });
+      return NextResponse.json({ error: msg(lang, 'needInput') }, { status: 400 });
     }
     const { owner, repo: repoName } = parsed;
     const octokit = octo(token);
@@ -88,13 +86,7 @@ export async function POST(req: NextRequest) {
       await workflowExists(octokit, owner, repoName, WORKFLOW_ID);
     } catch (e: any) {
       if (e?.status === 404) {
-        return NextResponse.json(
-          {
-            error:
-              'Workflow "build.yml" non trovato. Attiva Actions (Settings → Actions → Allow all) e assicurati che il file sia su main.',
-          },
-          { status: 404 }
-        );
+        return NextResponse.json({ error: msg(lang, 'wfNotFound') }, { status: 404 });
       }
     }
 
@@ -102,13 +94,7 @@ export async function POST(req: NextRequest) {
     try {
       const stats = await recentRunStats(octokit, owner, repoName, WORKFLOW_ID);
       if (stats.active >= MAX_ACTIVE_RUNS || stats.lastHour >= MAX_RUNS_PER_HOUR) {
-        return NextResponse.json(
-          {
-            error:
-              'Servizio molto occupato: troppe build in corso o nelle ultime ore. Riprova tra qualche minuto.',
-          },
-          { status: 429 }
-        );
+        return NextResponse.json({ error: msg(lang, 'busy') }, { status: 429 });
       }
     } catch {
       // se il controllo statistiche fallisce, proseguiamo comunque
@@ -117,7 +103,7 @@ export async function POST(req: NextRequest) {
     if (file) {
       // --- Modalità ZIP: committa lo zip su un branch di build e compila da lì ---
       if (file.size > 45 * 1024 * 1024) {
-        return NextResponse.json({ error: 'ZIP troppo grande (max ~45MB).' }, { status: 413 });
+        return NextResponse.json({ error: msg(lang, 'tooBig') }, { status: 413 });
       }
       const bytes = Buffer.from(await file.arrayBuffer());
       const base64 = bytes.toString('base64');
