@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prepareBuild } from '@/lib/builder';
+import { msg } from '@/lib/messages';
 import path from 'path';
 import fs from 'fs';
 
@@ -19,19 +20,14 @@ export async function POST(req: NextRequest) {
     const url = formData.get('url') as string;
     const primaryColor = formData.get('primaryColor') as string;
     const file = formData.get('file') as File | null;
+    const lang = String(formData.get('lang') || '');
 
     if (!appName || !appId) {
       return NextResponse.json({ error: 'Missing appName or appId' }, { status: 400 });
     }
 
     if (IS_SERVERLESS) {
-      return NextResponse.json(
-        {
-          error:
-            'La generazione dello ZIP sorgente in locale non è disponibile su questo deploy (ambiente serverless). Usa "Genera APK (GitHub)" dalla tab Download.',
-        },
-        { status: 501 }
-      );
+      return NextResponse.json({ error: msg(lang, 'serverless') }, { status: 501 });
     }
 
     let zipPath: string | undefined;
