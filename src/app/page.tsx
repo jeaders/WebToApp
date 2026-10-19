@@ -59,6 +59,13 @@ export default function Dashboard() {
   const [cloudRunUrl, setCloudRunUrl] = useState<string | null>(null);
   const [apkReady, setApkReady] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [winW, setWinW] = useState(1200);
+  useEffect(() => {
+    const on = () => setWinW(typeof window !== 'undefined' ? window.innerWidth : 1200);
+    on();
+    window.addEventListener('resize', on);
+    return () => window.removeEventListener('resize', on);
+  }, []);
   const go = (tab: 'upload' | 'preview' | 'settings' | 'logs' | 'download') => {
     setActiveTab(tab);
     setMenuOpen(false);
@@ -265,18 +272,45 @@ export default function Dashboard() {
     </div>
   );
 
+  const frameW = previewDevice === 'iphone' ? viewportWidth + 24 : viewportWidth + 16;
+  const frameH = previewDevice === 'iphone' ? viewportHeight + 60 : viewportHeight + 20;
+  // Su schermi stretti il device frame viene ridotto per non creare scroll orizzontale
+  const fit = winW < 768 ? Math.min(1, (winW - 48) / frameW) : 1;
+  const totalScale = (previewScale / 100) * fit;
+
   return (
-    <div className="min-h-screen bg-[#f8f9fa] flex flex-col md:flex-row">
-      {/* Mobile top bar */}
-      <div className="md:hidden sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-gray-200 flex items-center justify-between px-3 py-2">
-        <button onClick={() => setMenuOpen(true)} aria-label="Open menu" className="p-2 rounded-lg hover:bg-gray-100">
-          <LayoutDashboard size={22} className="text-gray-700" />
-        </button>
-        <span className="font-bold text-lg tracking-tight flex items-center gap-2">
-          <span className="bg-primary p-1.5 rounded-lg"><Smartphone className="w-4 h-4 text-white" /></span>
-          WebToApp
-        </span>
-        <LangToggle />
+    <div className="min-h-screen bg-[#f8f9fa] flex flex-col md:flex-row overflow-x-hidden">
+      {/* Mobile top bar + quick tab strip */}
+      <div className="md:hidden sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-gray-200">
+        <div className="flex items-center justify-between px-3 py-2">
+          <button onClick={() => setMenuOpen(true)} aria-label="Open menu" className="p-2 rounded-lg hover:bg-gray-100">
+            <LayoutDashboard size={22} className="text-gray-700" />
+          </button>
+          <span className="font-bold text-lg tracking-tight flex items-center gap-2">
+            <span className="bg-primary p-1.5 rounded-lg"><Smartphone className="w-4 h-4 text-white" /></span>
+            WebToApp
+          </span>
+          <LangToggle />
+        </div>
+        <div className="flex gap-1.5 overflow-x-auto px-3 pb-2 [scrollbar-width:none]">
+          {[
+            { id: 'upload', icon: <LayoutDashboard size={15} />, label: t('nav.dashboard') },
+            { id: 'preview', icon: <Smartphone size={15} />, label: t('nav.preview') },
+            { id: 'settings', icon: <Settings size={15} />, label: t('nav.settings') },
+            { id: 'logs', icon: <History size={15} />, label: t('nav.logs') },
+            { id: 'download', icon: <Download size={15} />, label: t('nav.download') },
+          ].map((tb) => (
+            <button
+              key={tb.id}
+              onClick={() => go(tb.id as any)}
+              className={`flex items-center gap-1.5 whitespace-nowrap px-3 py-2 rounded-full text-xs font-bold transition-all ${
+                activeTab === tb.id ? 'bg-black text-white' : 'bg-gray-100 text-gray-600'
+              }`}
+            >
+              {tb.icon}{tb.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Sidebar backdrop (mobile) */}
@@ -367,7 +401,7 @@ export default function Dashboard() {
         <div className="p-4 md:p-8 pb-24 md:pb-10 max-w-5xl mx-auto space-y-6 md:space-y-8">
           {activeTab === 'upload' && (
             <section className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4 mb-6 md:mb-8">
                 <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
                   <div className="flex items-center gap-2 mb-2">
                     <Globe size={16} className="text-purple-500" />
@@ -391,9 +425,9 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                 {/* Upload Section */}
-                <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+                <div className="bg-white p-5 md:p-8 rounded-3xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
                   <div className="mb-6">
                     <h3 className="text-lg font-bold mb-2">{t('src.title')}</h3>
                     <p className="text-sm text-gray-500">{t('src.subtitle')}</p>
@@ -432,7 +466,7 @@ export default function Dashboard() {
                 </div>
 
                 {/* Preview Card */}
-                <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm flex flex-col items-center justify-center">
+                <div className="bg-white p-5 md:p-8 rounded-3xl border border-gray-100 shadow-sm flex flex-col items-center justify-center">
                   <div className="relative w-48 h-96 bg-gray-900 rounded-[3rem] border-8 border-gray-800 shadow-2xl overflow-hidden">
                     <div className="absolute top-0 w-full h-6 bg-gray-800 flex justify-center z-20">
                       <div className="w-20 h-4 bg-black rounded-b-xl"></div>
@@ -457,7 +491,7 @@ export default function Dashboard() {
               </div>
 
               {isBuilding && (
-                <div className="bg-white p-6 rounded-2xl border border-blue-100 animate-pulse">
+                <div className="bg-white p-4 md:p-6 rounded-2xl border border-blue-100 animate-pulse">
                   <div className="flex justify-between mb-2">
                     <span className="text-sm font-semibold text-blue-900">{t('src.generating')}</span>
                     <span className="text-sm font-medium text-blue-600">{buildProgress}%</span>
@@ -475,7 +509,7 @@ export default function Dashboard() {
 
           {activeTab === 'preview' && (
             <div className="flex flex-col items-center animate-in fade-in zoom-in-95 duration-500 pb-20">
-              <div className="sticky top-4 z-50 w-full max-w-2xl space-y-4 mb-12">
+              <div className="sticky top-2 md:top-4 z-50 w-full max-w-2xl space-y-3 md:space-y-4 mb-8 md:mb-12">
                 <div className="flex items-center justify-between bg-white/80 backdrop-blur-md p-3 rounded-2xl border border-gray-100 shadow-lg">
                   <div className="flex items-center gap-2">
                     <button
@@ -546,11 +580,15 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* Device Frame */}
+              {/* Device Frame (auto-scaled to fit the viewport) */}
               <div
-                className="relative transition-all duration-500"
-                style={{ transform: `scale(${previewScale / 100})` }}
+                className="relative mx-auto"
+                style={{ width: frameW * totalScale, height: (frameH + 30) * totalScale }}
               >
+                <div
+                  className="relative transition-all duration-500 origin-top-left"
+                  style={{ transform: `scale(${totalScale})` }}
+                >
                 {previewDevice === 'iphone' ? (
                   <div
                     style={{ width: viewportWidth + 24, height: viewportHeight + 60 }}
@@ -594,13 +632,14 @@ export default function Dashboard() {
                 )}
 
                 <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 w-[80%] h-4 bg-black/10 blur-xl rounded-full" />
+                </div>
               </div>
             </div>
           )}
 
           {activeTab === 'settings' && (
-            <section className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <section className="bg-white p-5 md:p-8 rounded-3xl border border-gray-100 shadow-sm space-y-6 md:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8">
                 <div className="space-y-4">
                   <label className="block text-sm font-bold text-gray-700">{t('set.appName')}</label>
                   <input
@@ -713,7 +752,7 @@ export default function Dashboard() {
           )}
 
           {activeTab === 'logs' && (
-            <div className="bg-black rounded-2xl p-6 font-mono text-xs text-green-400 min-h-[400px] overflow-y-auto shadow-2xl animate-in fade-in zoom-in duration-300">
+            <div className="bg-black rounded-2xl p-4 md:p-6 font-mono text-xs text-green-400 min-h-[400px] overflow-y-auto shadow-2xl animate-in fade-in zoom-in duration-300">
               <div className="flex gap-2 mb-4 border-b border-gray-800 pb-2 text-gray-500">
                 <span className="w-3 h-3 rounded-full bg-red-500"></span>
                 <span className="w-3 h-3 rounded-full bg-yellow-500"></span>
@@ -734,7 +773,7 @@ export default function Dashboard() {
           {activeTab === 'download' && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
               {/* Cloud build (always available) — the path that produces the APK */}
-              <div className="bg-white p-8 rounded-3xl border border-blue-100 shadow-sm">
+              <div className="bg-white p-5 md:p-8 rounded-3xl border border-blue-100 shadow-sm">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                   <div>
                     <h3 className="text-lg font-bold mb-1 flex items-center gap-2">
@@ -781,7 +820,7 @@ export default function Dashboard() {
 
               {/* Local source (dev/filesystem only) */}
               {downloadLink ? (
-                <div className="bg-white p-6 rounded-3xl border border-green-100 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="bg-white p-5 md:p-6 rounded-3xl border border-green-100 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
                   <div>
                     <h3 className="text-lg font-bold">{t('dl.localTitle')}</h3>
                     <p className="text-sm text-gray-500">{t('dl.localDesc')}</p>
@@ -795,12 +834,12 @@ export default function Dashboard() {
                   </a>
                 </div>
               ) : (
-                <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm text-sm text-gray-500">
+                <div className="bg-white p-5 md:p-6 rounded-3xl border border-gray-100 shadow-sm text-sm text-gray-500">
                   {t('dl.localDisabled')}
                 </div>
               )}
 
-              <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
+              <div className="bg-white p-5 md:p-6 rounded-3xl border border-gray-100 shadow-sm">
                 <div className="flex items-center gap-4">
                   <div className="p-3 rounded-2xl bg-green-50 text-green-600">
                     <Smartphone size={24} />
@@ -818,7 +857,7 @@ export default function Dashboard() {
 
       {/* Toast Notification */}
       {showToast && (
-        <div className="fixed bottom-8 right-8 bg-black text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-4 animate-in fade-in slide-in-from-bottom-8 duration-300 z-50">
+        <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-8 md:bottom-8 bg-black text-white px-4 md:px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-4 animate-in fade-in slide-in-from-bottom-8 duration-300 z-50">
           <div className="bg-green-500 p-1 rounded-full">
             <CheckCircle2 size={16} className="text-white" />
           </div>
