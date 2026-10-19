@@ -17,6 +17,8 @@ jobs:
   trigger:
     name: Trigger Netlify build
     runs-on: ubuntu-latest
+    # Se Netlify non ha crediti il deploy fallisce: non deve segnare il repo come rosso.
+    continue-on-error: true
     steps:
       - name: Trigger Netlify build hook
         env:
