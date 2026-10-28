@@ -1046,20 +1046,20 @@ export default function Dashboard() {
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
               {/* Cloud build (always available) — the path that produces the APK */}
               <div className="bg-white p-5 md:p-8 rounded-3xl border border-blue-100 shadow-sm">
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                  <div>
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                  <div className="flex-1 min-w-0">
                     <h3 className="text-lg font-bold mb-1 flex items-center gap-2">
-                      <Cpu size={20} className="text-primary" /> {t('dl.cloudTitle')}
+                      <Cpu size={20} className="text-primary shrink-0" /> {t('dl.cloudTitle')}
                     </h3>
                     <p className="text-sm text-gray-500 max-w-xl">
                       {t('dl.cloudDesc')}{' '}
-                      <button onClick={() => go('settings')} className="text-primary font-medium hover:underline">{t('settingsLink')}</button>.
+                      <button onClick={() => go('settings')} className="text-primary font-medium hover:underline">{t('settingsLink')}</button>
                     </p>
                   </div>
                   <button
                     onClick={triggerCloudBuild}
                     disabled={cloudBuildStatus === 'dispatching' || cloudBuildStatus === 'building'}
-                    className="shrink-0 flex items-center justify-center gap-2 bg-primary text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-600 transition-all disabled:opacity-50"
+                    className="shrink-0 flex items-center justify-center gap-2 bg-primary text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-600 transition-all disabled:opacity-50 w-full lg:w-auto"
                   >
                     <Cpu size={20} />
                     {cloudBuildStatus === 'dispatching' ? t('btn.sending') : cloudBuildStatus === 'building' ? t('btn.cloudBuilding') : t('btn.generate')}
