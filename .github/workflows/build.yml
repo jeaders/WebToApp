@@ -41,6 +41,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Debug: verifica ZIP nel repo
+        if: inputs.site_zip != ''
+        run: |
+          echo "=== Branch attuale ==="
+          git rev-parse --abbrev-ref HEAD
+          echo "=== Contenuto radice repo ==="
+          ls -la
+          echo "=== Contenuto cartella builds/ ==="
+          ls -la builds/ 2>/dev/null || echo "cartella builds/ non trovata"
+          echo "=== Contenuto dello ZIP ==="
+          unzip -l builds/site.zip 2>/dev/null || echo "impossibile listare lo ZIP"
+
       - name: Validate inputs
         run: |
           if [ -z "$WEB_URL" ] && [ -z "$SITE_ZIP" ]; then
