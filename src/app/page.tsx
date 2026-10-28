@@ -12,9 +12,11 @@ import {
   AlertCircle,
   LayoutDashboard,
   History,
-  Zap
+  Zap,
+  QrCode
 } from 'lucide-react';
 import { translations, Lang } from '@/lib/i18n';
+import { InstallPwaButton } from '@/components/PwaRegister';
 
 export default function Dashboard() {
   const [lang, setLang] = useState<Lang>('en');
@@ -44,6 +46,14 @@ export default function Dashboard() {
   const [url, setUrl] = useState('');
   const [primaryColor, setPrimaryColor] = useState('#0070f3');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [appVersion, setAppVersion] = useState('0.1');
+  const [appBuild, setAppBuild] = useState('1');
+  const [appUserAgent, setAppUserAgent] = useState('WebToApp/0.1 (Android)');
+  const [previewUrl, setPreviewUrl] = useState('');
+  const [embeddable, setEmbeddable] = useState<boolean | null>(null);
+  const [shotFailed, setShotFailed] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [qrOpen, setQrOpen] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
   const [showToast, setShowToast] = useState(false);
   const addLog = (message: string) => {
@@ -71,6 +81,57 @@ export default function Dashboard() {
     setActiveTab(tab);
     setMenuOpen(false);
   };
+
+  // Anteprima: debounce per non bombardare il proxy mentre l'utente scrive.
+  useEffect(() => {
+    const v = url.trim();
+    if (!v) {
+      setPreviewUrl('');
+      return;
+    }
+    const abs = /^https?:\/\//i.test(v) ? v : `https://${v}`;
+    const id = setTimeout(() => setPreviewUrl(abs), 700);
+    return () => clearTimeout(id);
+  }, [url]);
+
+  // Shortcut PWA: /?tab=preview ecc.
+  useEffect(() => {
+    const tab = new URLSearchParams(window.location.search).get('tab');
+    if (tab === 'upload' || tab === 'preview' || tab === 'settings' || tab === 'logs' || tab === 'download') {
+      setActiveTab(tab);
+    }
+  }, []);
+
+  // I siti con X-Frame-Options / CSP frame-ancestors non si possono incorniciare:
+  // in quel caso mostriamo un'anteprima statica (screenshot) con link al sito.
+  useEffect(() => {
+    if (!previewUrl) {
+      setEmbeddable(null);
+      return;
+    }
+    let alive = true;
+    setEmbeddable(null);
+    fetch(`/api/embed-check?url=${encodeURIComponent(previewUrl)}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (alive) setEmbeddable(Boolean(d?.embeddable));
+      })
+      .catch(() => {
+        if (alive) setEmbeddable(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [previewUrl]);
+
+  const screenshotSrc = previewUrl
+    ? `https://image.thum.io/get/width/600/crop/1100/noanimate/${previewUrl}`
+    : '';
+
+  // Se lo screenshot non si carica mostriamo un fallback con link al sito.
+  useEffect(() => {
+    setShotFailed(false);
+  }, [screenshotSrc]);
 
   // La build cloud è preconfigurata dal gestore del sito? (token lato server)
   useEffect(() => {
@@ -145,6 +206,8 @@ export default function Dashboard() {
     setApkReady(false);
     setCloudRunId(null);
     setCloudRunUrl(null);
+    setQrDataUrl(null);
+    setQrOpen(false);
     addLog(selectedFile ? t('log.startZip') : t('log.startUrl'));
 
     const auth = needsManualAuth ? { token: githubToken, repo: githubRepo } : {};
@@ -158,6 +221,9 @@ export default function Dashboard() {
       fd.append('url', cleanUrl);
       fd.append('branch', 'main');
       fd.append('lang', lang);
+      fd.append('appVersion', appVersion);
+      fd.append('appBuild', appBuild);
+      fd.append('appUserAgent', appUserAgent);
       if (auth.token) fd.append('token', auth.token);
       if (auth.repo) fd.append('repo', auth.repo);
       if (selectedFile) fd.append('file', selectedFile);
@@ -196,6 +262,7 @@ export default function Dashboard() {
             setCloudBuildStatus('success');
             setApkReady(true);
             addLog(t('log.done'));
+            setActiveTab('download');
           } else {
             setCloudBuildStatus('failed');
             addLog(`${t('log.ended')}${l.conclusion || ''}`);
@@ -243,6 +310,34 @@ export default function Dashboard() {
     ctx.textBaseline = 'middle';
     ctx.fillText((appName.charAt(0) || 'W').toUpperCase(), 256, 260);
     setAppIcon(canvas.toDataURL('image/png'));
+  };
+
+  const showQrCode = async () => {
+    if (!cloudRunId) return;
+    try {
+      const QRCode = (await import('qrcode')).default;
+      const link = `${window.location.origin}/api/cloud-artifact?runId=${cloudRunId}`;
+      const dataUrl = await QRCode.toDataURL(link, {
+        width: 640,
+        margin: 2,
+        errorCorrectionLevel: 'M',
+        color: { dark: '#111111', light: '#ffffff' },
+      });
+      setQrDataUrl(dataUrl);
+      setQrOpen(true);
+    } catch (error: any) {
+      addLog(`${t('dl.qrError')} ${error?.message || ''}`.trim());
+    }
+  };
+
+  const downloadQrCode = () => {
+    if (!qrDataUrl) return;
+    const a = document.createElement('a');
+    a.href = qrDataUrl;
+    a.download = `webtoapp-qr-${cloudRunId || 'apk'}.png`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   };
 
   const startBuild = async () => {
@@ -318,6 +413,48 @@ export default function Dashboard() {
       >IT</button>
     </div>
   );
+
+  // Anteprima del sito: iframe interattivo se consentito, altrimenti screenshot.
+  const renderSite = (className: string) => {
+    if (!previewUrl) return null;
+
+    if (embeddable === null) {
+      return (
+        <div className={`${className} flex items-center justify-center bg-gray-50`}>
+          <span className="text-xs text-gray-400 animate-pulse">{t('preview.loading')}</span>
+        </div>
+      );
+    }
+
+    if (embeddable) {
+      return <iframe src={previewUrl} className={className} title="Preview" />;
+    }
+
+    if (shotFailed) {
+      return (
+        <div className={`${className} flex flex-col items-center justify-center gap-2 bg-gray-50 p-3 text-center`}>
+          <span className="text-xs text-gray-400">{t('preview.staticNote')}</span>
+          <a
+            href={previewUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs font-bold text-primary hover:underline"
+          >
+            {t('preview.openNew')}
+          </a>
+        </div>
+      );
+    }
+
+    return (
+      <img
+        src={screenshotSrc}
+        alt="Anteprima del sito"
+        onError={() => setShotFailed(true)}
+        className={`${className} object-cover object-top bg-gray-50`}
+      />
+    );
+  };
 
   const frameW = previewDevice === 'iphone' ? viewportWidth + 24 : viewportWidth + 16;
   const frameH = previewDevice === 'iphone' ? viewportHeight + 60 : viewportHeight + 20;
@@ -434,12 +571,16 @@ export default function Dashboard() {
             <div className="flex gap-3 items-center">
               <div className="hidden md:flex"><LangToggle /></div>
               <button
-                onClick={startBuild}
-                disabled={isBuilding}
+                onClick={triggerCloudBuild}
+                disabled={cloudBuildStatus === 'dispatching' || cloudBuildStatus === 'building'}
                 className="bg-black text-white px-4 py-2 rounded-full font-medium hover:bg-gray-800 transition-all flex items-center gap-2 disabled:opacity-50"
               >
-                {isBuilding ? t('btn.building') : t('btn.start')}
-                {!isBuilding && <Cpu size={18} />}
+                {cloudBuildStatus === 'dispatching'
+                  ? t('btn.sending')
+                  : cloudBuildStatus === 'building'
+                    ? t('btn.cloudBuilding')
+                    : t('btn.start')}
+                {cloudBuildStatus !== 'dispatching' && cloudBuildStatus !== 'building' && <Cpu size={18} />}
               </button>
             </div>
           </div>
@@ -519,21 +660,15 @@ export default function Dashboard() {
                       <div className="w-20 h-4 bg-black rounded-b-xl"></div>
                     </div>
                     <div className="w-full h-full bg-white flex items-center justify-center overflow-hidden">
-                      {url ? (
-                        <iframe
-                          src={url.startsWith('http') ? url : `https://${url}`}
-                          className="w-full h-full border-none scale-[0.9] origin-top"
-                          title="Preview"
-                        />
+                      {previewUrl ? (
+                        renderSite('w-full h-full border-none scale-[0.9] origin-top')
                       ) : selectedFile ? (
                         <div className="text-center p-4">
                           <Upload className="mx-auto mb-2 text-blue-200" size={40} />
                           <p className="text-xs text-blue-400 font-medium">
-                            ZIP caricato: {selectedFile.name}
+                            {t('src.zipReady')} {selectedFile.name}
                           </p>
-                          <p className="text-xs text-gray-400">
-                            Avvia la build per generare l'APK
-                          </p>
+                          <p className="text-xs text-gray-400">{t('src.zipBuildHint')}</p>
                         </div>
                       ) : (
                         <div className="text-center p-4">
@@ -630,10 +765,23 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                <div className="text-center">
+                <div className="text-center space-y-1">
                   <p className="text-[10px] text-gray-400 font-medium">
-                    💡 <b>{lang === 'en' ? 'Info' : 'Info'}:</b> {t('preview.info')}
+                    💡 <b>Info:</b> {t('preview.info')}
                   </p>
+                  {embeddable === false && (
+                    <p className="text-[10px] text-amber-600 font-medium">{t('preview.staticNote')}</p>
+                  )}
+                  {previewUrl && (
+                    <a
+                      href={previewUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-block text-xs text-primary font-bold hover:underline"
+                    >
+                      {t('preview.openNew')}
+                    </a>
+                  )}
                 </div>
               </div>
 
@@ -654,8 +802,8 @@ export default function Dashboard() {
                     <div className="absolute top-6 left-1/2 -translate-x-1/2 w-24 h-6 bg-black rounded-full z-20" />
 
                     <div className="w-full h-full bg-white rounded-[42px] overflow-hidden relative">
-                      {url ? (
-                        <iframe src={url.startsWith('http') ? url : `https://${url}`} className="w-full h-full border-none" title="App Preview" />
+                      {previewUrl ? (
+                        renderSite('w-full h-full border-none')
                       ) : (
                         <div className="flex flex-col items-center justify-center h-full p-6 text-center">
                           <div className="w-16 h-16 bg-gray-100 rounded-2xl mb-4 flex items-center justify-center">
@@ -674,8 +822,8 @@ export default function Dashboard() {
                     <div className="absolute top-4 left-1/2 -translate-x-1/2 w-3 h-3 bg-[#1a1a1a] rounded-full z-20" />
 
                     <div className="w-full h-full bg-white rounded-[32px] overflow-hidden relative">
-                      {url ? (
-                        <iframe src={url.startsWith('http') ? url : `https://${url}`} className="w-full h-full border-none" title="App Preview" />
+                      {previewUrl ? (
+                        renderSite('w-full h-full border-none')
                       ) : (
                         <div className="flex flex-col items-center justify-center h-full p-6 text-center">
                           <div className="w-16 h-16 bg-gray-100 rounded-2xl mb-4 flex items-center justify-center">
@@ -716,6 +864,41 @@ export default function Dashboard() {
                     placeholder={t('set.packageIdPlaceholder')}
                     className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl"
                   />
+                </div>
+                <div className="space-y-4">
+                  <label className="block text-sm font-bold text-gray-700">{t('set.version')}</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={appVersion}
+                    onChange={(e) => setAppVersion(e.target.value)}
+                    placeholder={t('set.versionHint')}
+                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl"
+                  />
+                  <p className="text-xs text-gray-400">{t('set.versionHint')}</p>
+                </div>
+                <div className="space-y-4">
+                  <label className="block text-sm font-bold text-gray-700">{t('set.build')}</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={appBuild}
+                    onChange={(e) => setAppBuild(e.target.value)}
+                    placeholder="1"
+                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl"
+                  />
+                  <p className="text-xs text-gray-400">{t('set.buildHint')}</p>
+                </div>
+                <div className="space-y-4 md:col-span-2">
+                  <label className="block text-sm font-bold text-gray-700">{t('set.userAgent')}</label>
+                  <input
+                    type="text"
+                    value={appUserAgent}
+                    onChange={(e) => setAppUserAgent(e.target.value)}
+                    placeholder="WebToApp/0.1 (Android)"
+                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-mono text-sm"
+                  />
+                  <p className="text-xs text-gray-400">{t('set.userAgentHint')}</p>
                 </div>
                 <div className="space-y-4">
                   <label className="block text-sm font-bold text-gray-700">{t('set.primaryColor')}</label>
@@ -809,6 +992,18 @@ export default function Dashboard() {
                 </div>
               </div>
 
+              {/* PWA */}
+              <div className="pt-8 border-t border-gray-100">
+                <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                  <Smartphone size={20} className="text-green-600" />
+                  {t('set.pwaTitle')}
+                </h3>
+                <div className="bg-green-50/50 p-6 rounded-2xl border border-green-100 flex flex-col md:flex-row md:items-center gap-4 md:justify-between">
+                  <p className="text-sm text-green-800 max-w-xl">{t('set.pwaText')}</p>
+                  <InstallPwaButton label={t('set.install')} />
+                </div>
+              </div>
+
               {/* Deep Linking */}
               <div className="pt-8 border-t border-gray-100">
                 <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
@@ -886,9 +1081,14 @@ export default function Dashboard() {
                         </a>
                       )}
                       {apkReady && (
-                        <button onClick={downloadApk} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-green-700 transition-all">
-                          <Download size={16} /> {t('btn.downloadApk')}
-                        </button>
+                        <>
+                          <button onClick={downloadApk} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-green-700 transition-all">
+                            <Download size={16} /> {t('btn.downloadApk')}
+                          </button>
+                          <button onClick={showQrCode} className="flex items-center gap-2 bg-gray-900 text-white px-4 py-2 rounded-lg font-bold hover:bg-black transition-all">
+                            <QrCode size={16} /> {t('btn.qr')}
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>
@@ -931,6 +1131,41 @@ export default function Dashboard() {
           )}
         </div>
       </main>
+
+      {/* QR Code modal */}
+      {qrOpen && qrDataUrl && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
+          onClick={() => setQrOpen(false)}
+        >
+          <div
+            className="bg-white rounded-3xl p-6 max-w-sm w-full text-center space-y-4 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold">{t('dl.qrTitle')}</h3>
+            <img
+              src={qrDataUrl}
+              alt="QR code"
+              className="w-full max-w-[280px] mx-auto rounded-2xl border border-gray-100"
+            />
+            <p className="text-xs text-gray-500">{t('dl.qrDesc')}</p>
+            <div className="flex gap-2">
+              <button
+                onClick={downloadQrCode}
+                className="flex-1 flex items-center justify-center gap-2 bg-primary text-white px-4 py-2.5 rounded-xl font-bold hover:bg-blue-600 transition-all"
+              >
+                <Download size={16} /> {t('dl.qrDownload')}
+              </button>
+              <button
+                onClick={() => setQrOpen(false)}
+                className="px-4 py-2.5 rounded-xl font-bold bg-gray-100 text-gray-700 hover:bg-gray-200 transition-all"
+              >
+                {t('dl.qrClose')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast Notification */}
       {showToast && (
