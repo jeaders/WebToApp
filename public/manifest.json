@@ -1,0 +1,56 @@
+{
+  "id": "/",
+  "name": "WebToApp — Website to Android APK",
+  "short_name": "WebToApp",
+  "description": "Convert any website or HTML/CSS/JS ZIP into an installable Android APK, free, using GitHub Actions.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "background_color": "#ffffff",
+  "theme_color": "#0070f3",
+  "orientation": "any",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["developer", "utilities", "productivity"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Preview",
+      "short_name": "Preview",
+      "url": "/?tab=preview",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "App Settings",
+      "short_name": "Settings",
+      "url": "/?tab=settings",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
