@@ -37,6 +37,9 @@ export async function POST(req: NextRequest) {
     let branch = 'main';
     let file: File | null = null;
     let lang = 'en';
+    let appVersion = '';
+    let appBuild = '';
+    let appUserAgent = '';
 
     if (ct.includes('multipart/form-data')) {
       const fd = await req.formData();
@@ -47,6 +50,9 @@ export async function POST(req: NextRequest) {
       url = String(fd.get('url') || '');
       branch = String(fd.get('branch') || 'main') || 'main';
       lang = String(fd.get('lang') || 'en');
+      appVersion = String(fd.get('appVersion') || '');
+      appBuild = String(fd.get('appBuild') || '');
+      appUserAgent = String(fd.get('appUserAgent') || '');
       const f = fd.get('file');
       if (f && typeof f === 'object' && 'arrayBuffer' in (f as any)) file = f as File;
     } else {
@@ -58,7 +64,15 @@ export async function POST(req: NextRequest) {
       url = body.url || '';
       branch = body.branch || 'main';
       lang = body.lang || 'en';
+      appVersion = body.appVersion || '';
+      appBuild = body.appBuild || '';
+      appUserAgent = body.appUserAgent || '';
     }
+
+    // Valori di default per versione / build number / user agent.
+    if (!appVersion || !/^[0-9]+(\.[0-9]+){0,3}$/.test(appVersion.trim())) appVersion = '0.1';
+    if (!appBuild || !/^[0-9]+$/.test(appBuild.trim())) appBuild = '1';
+    appUserAgent = appUserAgent.trim().slice(0, 200);
 
     // Default dalla configurazione server: il visitatore non deve inserire nulla.
     token = token || server.token;
@@ -122,6 +136,9 @@ export async function POST(req: NextRequest) {
         app_id: appId,
         web_url: url,
         site_zip: zipPath,
+        app_version: appVersion,
+        app_build: appBuild,
+        app_user_agent: appUserAgent,
       });
       // Rispondiamo subito: su ambienti serverless (Netlify) le funzioni hanno
       // un timeout breve. Lo stato viene recuperato da /api/cloud-latest.
@@ -140,6 +157,9 @@ export async function POST(req: NextRequest) {
       app_id: appId,
       web_url: url,
       site_zip: '',
+      app_version: appVersion,
+      app_build: appBuild,
+      app_user_agent: appUserAgent,
     });
     return NextResponse.json({
       success: true,
