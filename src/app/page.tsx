@@ -127,6 +127,20 @@ export default function Dashboard() {
       return;
     }
 
+    // Validazione file ZIP se presente
+    if (selectedFile) {
+      if (!selectedFile.size || selectedFile.size === 0) {
+        alert(t('log.needValidZip'));
+        setActiveTab('upload');
+        return;
+      }
+      if (!selectedFile.name.toLowerCase().endsWith('.zip')) {
+        alert(t('log.needZipFile'));
+        setActiveTab('upload');
+        return;
+      }
+    }
+
     setCloudBuildStatus('dispatching');
     setApkReady(false);
     setCloudRunId(null);
