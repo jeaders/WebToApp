@@ -54,6 +54,7 @@ export default function Dashboard() {
   const [githubToken, setGithubToken] = useState('');
   const [githubRepo, setGithubRepo] = useState('');
   const [serviceConfigured, setServiceConfigured] = useState<boolean | null>(null);
+  const [appIcon, setAppIcon] = useState<string | null>(null);
   const [cloudBuildStatus, setCloudBuildStatus] = useState<'idle' | 'dispatching' | 'building' | 'success' | 'failed'>('idle');
   const [cloudRunId, setCloudRunId] = useState<number | null>(null);
   const [cloudRunUrl, setCloudRunUrl] = useState<string | null>(null);
@@ -196,6 +197,38 @@ export default function Dashboard() {
       addLog(`${t('log.cloudErr')}${error.message}`);
       setCloudBuildStatus('failed');
     }
+  };
+
+  const handleIconFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      alert("Per favore carica un'immagine valida.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setAppIcon(reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const generateRandomIcon = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 512;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const hue = Math.floor(Math.random() * 360);
+    ctx.fillStyle = `hsl(${hue}, 70%, 60%)`;
+    ctx.fillRect(0, 0, 512, 512);
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(256, 256, 110, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.font = 'bold 180px system-ui';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText((appName.charAt(0) || 'W').toUpperCase(), 256, 260);
+    setAppIcon(canvas.toDataURL('image/png'));
   };
 
   const startBuild = async () => {
@@ -681,10 +714,30 @@ export default function Dashboard() {
                 <div className="space-y-4">
                   <label className="block text-sm font-bold text-gray-700">{t('set.icon')}</label>
                   <div className="flex items-center gap-4">
-                    <div className="w-16 h-16 bg-gray-100 rounded-2xl border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400">
-                      <Upload size={20} />
+                    <div className="w-16 h-16 rounded-2xl border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden relative">
+                      {appIcon ? (
+                        <img src={appIcon} alt="Icona" className="w-full h-full object-cover" />
+                      ) : (
+                        <Upload size={20} className="text-gray-400" />
+                      )}
                     </div>
-                    <button className="text-sm font-medium text-primary hover:underline">{t('set.uploadIcon')}</button>
+                    <div className="flex flex-col gap-2">
+                      <label className="flex items-center gap-2 cursor-pointer text-sm text-primary hover:underline">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handleIconFileChange}
+                        />
+                        {t('set.uploadIcon')}
+                      </label>
+                      <button
+                        onClick={generateRandomIcon}
+                        className="flex items-center gap-1 text-xs text-primary hover:underline"
+                      >
+                        <Zap size={14} /> {t('set.generateIcon')}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
