@@ -525,6 +525,16 @@ export default function Dashboard() {
                           className="w-full h-full border-none scale-[0.9] origin-top"
                           title="Preview"
                         />
+                      ) : selectedFile ? (
+                        <div className="text-center p-4">
+                          <Upload className="mx-auto mb-2 text-blue-200" size={40} />
+                          <p className="text-xs text-blue-400 font-medium">
+                            ZIP caricato: {selectedFile.name}
+                          </p>
+                          <p className="text-xs text-gray-400">
+                            Avvia la build per generare l'APK
+                          </p>
+                        </div>
                       ) : (
                         <div className="text-center p-4">
                           <Globe className="mx-auto mb-2 text-blue-200" size={40} />
