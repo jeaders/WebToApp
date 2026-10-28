@@ -3,7 +3,6 @@ import {
   octo,
   serverConfig,
   workflowExists,
-  ensureBranchFrom,
   commitFile,
   dispatchWorkflow,
   recentRunStats,
@@ -101,26 +100,24 @@ export async function POST(req: NextRequest) {
     }
 
     if (file) {
-      // --- Modalità ZIP: committa lo zip su un branch di build e compila da lì ---
+      // --- Modalità ZIP: commetto lo zip sul branch attuale e compilo da lì ---
       if (file.size > 45 * 1024 * 1024) {
         return NextResponse.json({ error: msg(lang, 'tooBig') }, { status: 413 });
       }
       const bytes = Buffer.from(await file.arrayBuffer());
       const base64 = bytes.toString('base64');
-      const buildBranch = 'ci-build';
       const zipPath = 'builds/site.zip';
 
-      await ensureBranchFrom(octokit, owner, repoName, buildBranch, branch);
       await commitFile(
         octokit,
         owner,
         repoName,
-        buildBranch,
+        branch,
         zipPath,
         base64,
         `WebToApp: upload site ${appId || ''}`.trim()
       );
-      await dispatchWorkflow(octokit, owner, repoName, WORKFLOW_ID, buildBranch, {
+      await dispatchWorkflow(octokit, owner, repoName, WORKFLOW_ID, branch, {
         app_name: appName,
         app_id: appId,
         web_url: url,
@@ -131,7 +128,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         success: true,
         mode: 'zip',
-        branch: buildBranch,
+        branch,
         repo: `${owner}/${repoName}`,
         message: 'Build avviata dal tuo ZIP.',
       });
