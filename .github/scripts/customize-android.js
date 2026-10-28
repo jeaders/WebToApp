@@ -1,14 +1,17 @@
 /**
  * Applica versione, build number e User-Agent all'app Capacitor appena generata.
- * Eseguito dal workflow subito dopo `npx cap add android`.
+ * Eseguito dal workflow subito dopo `npx cap add android` + `npx cap sync android`.
  *
  * Variabili d'ambiente:
  *   APP_VERSION     versionName (es. "0.1" o "1.2.3")
  *   APP_BUILD       versionCode (intero positivo)
  *   APP_USER_AGENT  stringa aggiunta allo User-Agent della WebView
+ *
+ * Lo User-Agent usa l'opzione nativa di Capacitor `android.appendUserAgent`,
+ * che viene applicata in initWebView() prima di caricare il sito: nessuna
+ * patch fragile al codice Java.
  */
 const fs = require('fs');
-const path = require('path');
 
 function sanitizeVersion(value) {
   const v = String(value || '').trim();
@@ -23,10 +26,19 @@ function sanitizeBuild(value) {
   return String(Math.min(n, 2100000000));
 }
 
+function sanitizeUserAgent(value, versionName) {
+  const fallback = `WebToApp/${versionName} (Android)`;
+  const cleaned = String(value || '')
+    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 200);
+  return cleaned || fallback;
+}
+
 const versionName = sanitizeVersion(process.env.APP_VERSION);
 const versionCode = sanitizeBuild(process.env.APP_BUILD);
-const userAgent =
-  String(process.env.APP_USER_AGENT || '').trim() || `WebToApp/${versionName} (Android)`;
+const userAgent = sanitizeUserAgent(process.env.APP_USER_AGENT, versionName);
 
 /* ------------------------------------------------------------------ */
 /* 1. versionName / versionCode in android/app/build.gradle            */
@@ -50,47 +62,45 @@ fs.writeFileSync(gradlePath, gradle);
 console.log(`build.gradle aggiornato: versionName="${versionName}" versionCode=${versionCode}`);
 
 /* ------------------------------------------------------------------ */
-/* 2. User-Agent personalizzato in MainActivity.java                   */
+/* 2. User-Agent: android.appendUserAgent nella config Capacitor       */
 /* ------------------------------------------------------------------ */
-function findFile(dir, name) {
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      const found = findFile(full, name);
-      if (found) return found;
-    } else if (entry.name === name) {
-      return full;
+const NATIVE_CONFIG = 'android/app/src/main/assets/capacitor.config.json';
+
+function applyUserAgent(file, { required }) {
+  if (!fs.existsSync(file)) {
+    if (required) {
+      console.error(`Config nativa mancante: ${file} (esegui prima "npx cap sync android")`);
+      process.exit(1);
     }
-  }
-  return null;
-}
-
-const javaRoot = 'android/app/src/main/java';
-const mainActivity = fs.existsSync(javaRoot) ? findFile(javaRoot, 'MainActivity.java') : null;
-
-if (!mainActivity) {
-  console.log('MainActivity.java non trovato: User-Agent non applicato.');
-  process.exit(0);
-}
-
-let java = fs.readFileSync(mainActivity, 'utf8');
-
-if (java.includes('setUserAgentString')) {
-  console.log('User-Agent già presente: nessuna modifica.');
-} else {
-  const onCreate = /super\.onCreate\([^)]*\);/;
-  if (!onCreate.test(java)) {
-    console.log('onCreate non trovato: User-Agent non applicato.');
-    process.exit(0);
+    console.log(`Config non trovata, salto: ${file}`);
+    return false;
   }
 
-  const literal = JSON.stringify(userAgent);
-  const snippet =
-    `\n        android.webkit.WebSettings wtaSettings = this.getBridge().getWebView().getSettings();\n` +
-    `        String wtaBaseUa = wtaSettings.getUserAgentString();\n` +
-    `        wtaSettings.setUserAgentString((wtaBaseUa == null ? "" : wtaBaseUa + " ") + ${literal});\n`;
+  let cfg;
+  try {
+    cfg = JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch (error) {
+    console.error(`Config non valida (${file}): ${error.message}`);
+    process.exit(1);
+  }
 
-  java = java.replace(onCreate, (match) => match + snippet);
-  fs.writeFileSync(mainActivity, java);
-  console.log(`User-Agent impostato in ${mainActivity}: ${userAgent}`);
+  cfg.android = { ...(cfg.android || {}), appendUserAgent: userAgent };
+  fs.writeFileSync(file, JSON.stringify(cfg, null, 2));
+  console.log(`User-Agent impostato in ${file}: ${userAgent}`);
+  return true;
 }
+
+// La config nativa è quella che l'app legge a runtime: se manca è un errore.
+applyUserAgent(NATIVE_CONFIG, { required: true });
+// Teniamo allineata anche la config di progetto (per sync successivi).
+applyUserAgent('capacitor.config.json', { required: false });
+
+/* ------------------------------------------------------------------ */
+/* 3. Verifica finale                                                  */
+/* ------------------------------------------------------------------ */
+const check = JSON.parse(fs.readFileSync(NATIVE_CONFIG, 'utf8'));
+if (!check?.android?.appendUserAgent) {
+  console.error('Verifica fallita: android.appendUserAgent assente nella config nativa.');
+  process.exit(1);
+}
+console.log('Verifica OK: versione, build number e User-Agent applicati.');
