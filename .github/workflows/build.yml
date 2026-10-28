@@ -24,6 +24,18 @@ on:
         description: "Path nello repo di uno ZIP da impacchettare (modalità ZIP, es. builds/site.zip)"
         required: false
         default: ""
+      app_version:
+        description: "Versione app / versionName (es. 0.1 oppure 1.2.3)"
+        required: false
+        default: "0.1"
+      app_build:
+        description: "Build number / versionCode (numero intero)"
+        required: false
+        default: "1"
+      app_user_agent:
+        description: "User-Agent aggiunto alla WebView (vuoto = WebToApp/<versione>)"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -37,6 +49,9 @@ jobs:
       APP_ID: ${{ inputs.app_id }}
       WEB_URL: ${{ inputs.web_url }}
       SITE_ZIP: ${{ inputs.site_zip }}
+      APP_VERSION: ${{ inputs.app_version }}
+      APP_BUILD: ${{ inputs.app_build }}
+      APP_USER_AGENT: ${{ inputs.app_user_agent }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -149,6 +164,9 @@ jobs:
         run: |
           npx cap add android
           npx cap sync android
+
+      - name: Set app version, build number and User-Agent
+        run: node .github/scripts/customize-android.js
 
       - name: Verify runtime config in native assets
         run: |
