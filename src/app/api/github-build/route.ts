@@ -17,6 +17,65 @@ const WORKFLOW_ID = 'build.yml';
 const MAX_ACTIVE_RUNS = 2; // build in corso contemporaneamente
 const MAX_RUNS_PER_HOUR = 40; // build avviate nell'ultima ora (tutti i visitatori)
 
+/* ------------------------------------------------------------------ */
+/* Package ID                                                          */
+/* ------------------------------------------------------------------ */
+// Android riconosce un'app dal package ID: due APK con lo stesso ID (e la
+// stessa firma) sono la stessa app, quindi il secondo viene installato come
+// "aggiornamento" e sostituisce il primo. Per questo il default fisso
+// (com.yourname.app) non è più accettato: se arriva un placeholder ne
+// generiamo uno diverso per ogni sito.
+const PACKAGE_ID_RE = /^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$/;
+const RESERVED_PACKAGE_IDS = new Set([
+  'com.yourname.app',
+  'com.tuonome.app',
+  'com.webtoapp.app',
+  'com.webtoapp.starter',
+  'com.example.app',
+]);
+
+function packageSlug(value: string): string {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/^www\./, '')
+    .replace(/[^a-z0-9]/g, '')
+    .slice(0, 30);
+}
+
+function derivePackageId(url: string, appName: string): string {
+  let host = '';
+  const raw = String(url || '').trim();
+  if (raw) {
+    try {
+      host = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`).hostname;
+    } catch {
+      host = '';
+    }
+  }
+  let base = packageSlug(host) || packageSlug(appName) || 'app';
+  if (/^[0-9]/.test(base)) base = `app${base}`;
+  const id = `com.webtoapp.${base}`;
+  if (RESERVED_PACKAGE_IDS.has(id)) {
+    // fallback deterministico: stesso sito -> stesso ID, così gli aggiornamenti restano possibili
+    let hash = 0;
+    const seed = `${raw}|${appName}`;
+    for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) % 100000;
+    return `com.webtoapp.${base}${String(hash).padStart(5, '0')}`;
+  }
+  return id;
+}
+
+function normalizeAppId(rawId: string, url: string, appName: string): string {
+  const value = String(rawId || '').trim();
+  if (!value || RESERVED_PACKAGE_IDS.has(value.toLowerCase())) {
+    const derived = derivePackageId(url, appName);
+    console.log(`Package ID automatico: "${value || '(vuoto)'}" -> "${derived}"`);
+    return derived;
+  }
+  return value;
+}
+
+
 function parseRepo(repo: string): { owner: string; repo: string } | null {
   if (!repo || !repo.includes('/')) return null;
   const [owner, name] = repo.split('/');
@@ -73,6 +132,12 @@ export async function POST(req: NextRequest) {
     if (!appVersion || !/^[0-9]+(\.[0-9]+){0,3}$/.test(appVersion.trim())) appVersion = '0.1';
     if (!appBuild || !/^[0-9]+$/.test(appBuild.trim())) appBuild = '1';
     appUserAgent = appUserAgent.trim().slice(0, 200);
+
+    // Package ID: mai un placeholder, altrimenti l'app sostituirebbe quella già installata.
+    appId = normalizeAppId(appId, url, appName);
+    if (!PACKAGE_ID_RE.test(appId)) {
+      return NextResponse.json({ error: msg(lang, 'badAppId') }, { status: 400 });
+    }
 
     // Default dalla configurazione server: il visitatore non deve inserire nulla.
     token = token || server.token;
@@ -145,6 +210,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         success: true,
         mode: 'zip',
+        appId,
         branch,
         repo: `${owner}/${repoName}`,
         message: 'Build avviata dal tuo ZIP.',
@@ -164,6 +230,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       mode: 'url',
+      appId,
       branch,
       repo: `${owner}/${repoName}`,
       message: 'Build avviata.',
