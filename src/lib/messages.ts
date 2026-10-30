@@ -11,7 +11,8 @@ type MsgKey =
   | "serverless"
   | "notReady"
   | "noArtifact"
-  | "missingParams";
+  | "missingParams"
+  | "badAppId";
 
 const messages: Record<"en" | "it", Record<MsgKey, string>> = {
   en: {
@@ -29,6 +30,8 @@ const messages: Record<"en" | "it", Record<MsgKey, string>> = {
     notReady: "The build has not completed successfully yet.",
     noArtifact: "No artifact found for this run.",
     missingParams: "Missing parameters.",
+    badAppId:
+      "Invalid Package ID. Use at least two parts with letters, digits or underscore (e.g. com.yourname.myapp).",
   },
   it: {
     needInput: "Inserisci un URL oppure carica uno ZIP.",
@@ -45,6 +48,8 @@ const messages: Record<"en" | "it", Record<MsgKey, string>> = {
     notReady: "La build non è ancora completata con successo.",
     noArtifact: "Nessun artifact trovato per questa run.",
     missingParams: "Parametri mancanti.",
+    badAppId:
+      "Package ID non valido. Usa almeno due parti con lettere, numeri o underscore (es. com.tuonome.miaapp).",
   },
 };
 
