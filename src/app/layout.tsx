@@ -34,12 +34,21 @@ export const metadata: Metadata = {
     description:
       "Turn any website or HTML/CSS/JS project into an installable Android APK with one click.",
     url: SITE_URL,
+    images: [
+      {
+        url: "/og.png",
+        width: 1280,
+        height: 640,
+        alt: "WebToApp — turn any website into a native Android app",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "WebToApp — Website to Android APK",
     description:
       "Turn any website or HTML/CSS/JS project into an installable Android APK with one click.",
+    images: ["/og.png"],
   },
   robots: { index: true, follow: true },
   other: {
