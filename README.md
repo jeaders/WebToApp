@@ -81,11 +81,13 @@ The dashboard host **does not compile anything**: it only serves the UI and trig
 
 1. Open **[webstoapp.netlify.app](https://webstoapp.netlify.app)**.
 2. Paste a **URL** or drop a **ZIP** with your site.
-3. *(Optional)* **App Settings** → name, package ID, version, build number, User-Agent, icon.
+3. *(Optional)* **App Settings** → name, **package ID**, version, build number, User-Agent, icon.
 4. Press **Start Build**.
 5. When the build is green you land on **Download**: grab the **APK** or scan the **QR code** with your phone.
 
 > Typing `example.com` is enough — the URL is normalized to `https://example.com`.
+
+> 🆔 **Package ID** is what makes Android see two apps as different. The dashboard generates one from your site (`com.webtoapp.<site>`); if two builds share the same ID, the second is installed as an **update** of the first and replaces it. Change it before building a *different* app, and keep it stable to ship updates of the *same* app.
 
 ---
 
@@ -216,6 +218,7 @@ docs/social-preview.png                # GitHub social preview image (1280×640)
 | **Old APK crashes on launch** | Regenerate it: builds made before URL normalization (`https://`) could crash on some devices. |
 | **Preview is a static screenshot** | The site blocks embedding (`X-Frame-Options` / CSP). The screenshot is intentional; use *Open in a new tab* for the real thing. |
 | **QR points to localhost** | You generated it from `npm run dev`. On the deployed site the QR always uses the public domain. |
+| **A new app replaces the previous one** | Both share the same **Package ID** (App Settings): Android treats them as the same app. Give each app its own ID — the dashboard does it automatically from the site URL, placeholders like `com.yourname.app` are rejected. |
 
 ---
 
