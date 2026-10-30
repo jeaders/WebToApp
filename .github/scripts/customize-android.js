@@ -96,11 +96,29 @@ applyUserAgent(NATIVE_CONFIG, { required: true });
 applyUserAgent('capacitor.config.json', { required: false });
 
 /* ------------------------------------------------------------------ */
-/* 3. Verifica finale                                                  */
+/* 3. Package ID: deve essere quello richiesto                         */
+/* ------------------------------------------------------------------ */
+// Android identifica l'app dal package ID: se non corrisponde a quello scelto,
+// due app diverse finirebbero per sovrascriversi a vicenda.
+const expectedAppId = String(process.env.APP_ID || '').trim();
+const appIdMatch = gradle.match(/applicationId\s+"([^"]+)"/);
+if (!appIdMatch) {
+  console.error('applicationId non trovato in android/app/build.gradle');
+  process.exit(1);
+}
+const actualAppId = appIdMatch[1];
+if (expectedAppId && actualAppId !== expectedAppId) {
+  console.error(`Package ID non applicato: atteso "${expectedAppId}", trovato "${actualAppId}".`);
+  process.exit(1);
+}
+console.log(`applicationId=${actualAppId}`);
+
+/* ------------------------------------------------------------------ */
+/* 4. Verifica finale                                                  */
 /* ------------------------------------------------------------------ */
 const check = JSON.parse(fs.readFileSync(NATIVE_CONFIG, 'utf8'));
 if (!check?.android?.appendUserAgent) {
   console.error('Verifica fallita: android.appendUserAgent assente nella config nativa.');
   process.exit(1);
 }
-console.log('Verifica OK: versione, build number e User-Agent applicati.');
+console.log('Verifica OK: versione, build number, User-Agent e package ID applicati.');
