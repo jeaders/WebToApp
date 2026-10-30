@@ -63,6 +63,19 @@ jobs:
             exit 1
           fi
           echo "App: $APP_NAME ($APP_ID)"
+          # Il package ID identifica l'app sul dispositivo: se resta un segnaposto,
+          # la nuova app verrebbe installata come aggiornamento della precedente.
+          case "$APP_ID" in
+            com.yourname.app|com.tuonome.app|com.webtoapp.app|com.webtoapp.starter|com.example.app)
+              echo "::error::Package ID segnaposto ($APP_ID). Usa un ID tuo, es. com.tuonome.miaapp: con un ID condiviso la nuova app sostituisce quella già installata."
+              exit 1
+              ;;
+          esac
+          if ! printf '%s' "$APP_ID" | grep -qE '^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$'; then
+            echo "::error::Package ID non valido: $APP_ID (es. com.tuonome.miaapp)"
+            exit 1
+          fi
+          echo "Package ID valido: $APP_ID"
           if [ -n "$SITE_ZIP" ]; then echo "Modalità: ZIP -> $SITE_ZIP"; else echo "Modalità: URL -> $WEB_URL"; fi
 
       - name: Setup Node.js
