@@ -18,6 +18,53 @@ import {
 import { translations, Lang } from '@/lib/i18n';
 import { InstallPwaButton } from '@/components/PwaRegister';
 
+/* ------------------------------------------------------------------ */
+/* Package ID                                                          */
+/* ------------------------------------------------------------------ */
+// Android identifica un'app dal package ID. Con un default fisso tutte le app
+// generate avevano lo stesso ID: la seconda veniva installata come "aggiornamento"
+// della prima (stesso ID + stessa firma) e sostituiva l'app già presente.
+// Qui ne generiamo uno diverso per ogni sito, e blocchiamo i placeholder noti.
+const PACKAGE_ID_RE = /^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$/;
+const RESERVED_PACKAGE_IDS = [
+  'com.yourname.app',
+  'com.tuonome.app',
+  'com.webtoapp.app',
+  'com.webtoapp.starter',
+  'com.example.app',
+];
+
+function packageSlug(value: string): string {
+  return (value || '')
+    .toLowerCase()
+    .replace(/^www\./, '')
+    .replace(/[^a-z0-9]/g, '')
+    .slice(0, 30);
+}
+
+function derivePackageId(rawUrl: string, appName: string): string {
+  let host = '';
+  const value = (rawUrl || '').trim();
+  if (value) {
+    try {
+      host = new URL(/^https?:\/\//i.test(value) ? value : `https://${value}`).hostname;
+    } catch {
+      host = '';
+    }
+  }
+  let base = packageSlug(host) || packageSlug(appName) || 'app';
+  if (/^[0-9]/.test(base)) base = `app${base}`;
+  return `com.webtoapp.${base}`;
+}
+
+function packageIdProblem(id: string): 'empty' | 'format' | 'reserved' | null {
+  const v = (id || '').trim();
+  if (!v) return 'empty';
+  if (RESERVED_PACKAGE_IDS.includes(v.toLowerCase())) return 'reserved';
+  if (!PACKAGE_ID_RE.test(v)) return 'format';
+  return null;
+}
+
 export default function Dashboard() {
   const [lang, setLang] = useState<Lang>('en');
   const t = (k: string): string => translations[lang][k] ?? k;
@@ -42,7 +89,8 @@ export default function Dashboard() {
   const [isBuilding, setIsBuilding] = useState(false);
   const [buildProgress, setBuildProgress] = useState(0);
   const [appName, setAppName] = useState('My Awesome App');
-  const [appId, setAppId] = useState('com.yourname.app');
+  const [appId, setAppId] = useState('');
+  const [appIdTouched, setAppIdTouched] = useState(false);
   const [url, setUrl] = useState('');
   const [primaryColor, setPrimaryColor] = useState('#0070f3');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -93,6 +141,14 @@ export default function Dashboard() {
     const id = setTimeout(() => setPreviewUrl(abs), 700);
     return () => clearTimeout(id);
   }, [url]);
+
+  // Package ID: generato dal sito (o dal nome del file / dell'app) finché
+  // l'utente non lo modifica a mano. Ogni app ottiene così un ID diverso.
+  useEffect(() => {
+    if (appIdTouched) return;
+    const fallbackName = selectedFile ? selectedFile.name.replace(/\.zip$/i, '') : appName;
+    setAppId(derivePackageId(url, fallbackName));
+  }, [url, appName, selectedFile, appIdTouched]);
 
   // Shortcut PWA: /?tab=preview ecc.
   useEffect(() => {
@@ -188,6 +244,20 @@ export default function Dashboard() {
       return;
     }
 
+    // Package ID: senza un ID valido l'app sovrascriverebbe quella già installata.
+    const effectiveAppId =
+      appId.trim() ||
+      derivePackageId(url, selectedFile ? selectedFile.name.replace(/\.zip$/i, '') : appName);
+    const idProblem = packageIdProblem(effectiveAppId);
+    if (idProblem) {
+      const message = t(`set.packageIdError.${idProblem}`);
+      addLog(message);
+      alert(message);
+      setActiveTab('settings');
+      return;
+    }
+    if (!appId.trim()) setAppId(effectiveAppId);
+
     // Validazione file ZIP se presente
     if (selectedFile) {
       if (!selectedFile.size || selectedFile.size === 0) {
@@ -209,6 +279,7 @@ export default function Dashboard() {
     setQrDataUrl(null);
     setQrOpen(false);
     addLog(selectedFile ? t('log.startZip') : t('log.startUrl'));
+    addLog(`Package ID: ${effectiveAppId}`);
 
     const auth = needsManualAuth ? { token: githubToken, repo: githubRepo } : {};
     const startedMs = Date.now() - 5000; // tolleranza: ignora run create prima del click
@@ -216,7 +287,7 @@ export default function Dashboard() {
     try {
       const fd = new FormData();
       fd.append('appName', appName);
-      fd.append('appId', appId);
+      fd.append('appId', effectiveAppId);
       const cleanUrl = url && !/^https?:\/\//i.test(url) ? 'https://' + url : (url || '');
       fd.append('url', cleanUrl);
       fd.append('branch', 'main');
@@ -346,6 +417,19 @@ export default function Dashboard() {
       return;
     }
 
+    const effectiveAppId =
+      appId.trim() ||
+      derivePackageId(url, selectedFile ? selectedFile.name.replace(/\.zip$/i, '') : appName);
+    const idProblem = packageIdProblem(effectiveAppId);
+    if (idProblem) {
+      const message = t(`set.packageIdError.${idProblem}`);
+      addLog(message);
+      alert(message);
+      setActiveTab('settings');
+      return;
+    }
+    if (!appId.trim()) setAppId(effectiveAppId);
+
     setIsBuilding(true);
     setBuildProgress(0);
     setLogs([]);
@@ -356,7 +440,7 @@ export default function Dashboard() {
     try {
       const formData = new FormData();
       formData.append('appName', appName);
-      formData.append('appId', appId);
+      formData.append('appId', effectiveAppId);
       formData.append('url', url);
       formData.append('primaryColor', primaryColor);
       formData.append('lang', lang);
@@ -856,14 +940,35 @@ export default function Dashboard() {
                   />
                 </div>
                 <div className="space-y-4">
-                  <label className="block text-sm font-bold text-gray-700">{t('set.packageId')}</label>
+                  <div className="flex items-center justify-between gap-3">
+                    <label className="block text-sm font-bold text-gray-700">{t('set.packageId')}</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAppIdTouched(false);
+                        setAppId(derivePackageId(url, selectedFile ? selectedFile.name.replace(/\.zip$/i, '') : appName));
+                      }}
+                      className="text-xs text-primary font-medium hover:underline"
+                    >
+                      {t('set.packageIdAuto')}
+                    </button>
+                  </div>
                   <input
                     type="text"
                     value={appId}
-                    onChange={(e) => setAppId(e.target.value)}
+                    onChange={(e) => { setAppId(e.target.value); setAppIdTouched(true); }}
                     placeholder={t('set.packageIdPlaceholder')}
-                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl"
+                    className={`w-full p-3 bg-gray-50 border rounded-xl font-mono text-sm ${
+                      appIdTouched && packageIdProblem(appId) ? 'border-red-300 bg-red-50' : 'border-gray-200'
+                    }`}
                   />
+                  {appIdTouched && packageIdProblem(appId) ? (
+                    <p className="text-xs text-red-500 font-medium">
+                      {t(`set.packageIdError.${packageIdProblem(appId)}`)}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-gray-400">{t('set.packageIdHint')}</p>
+                  )}
                 </div>
                 <div className="space-y-4">
                   <label className="block text-sm font-bold text-gray-700">{t('set.version')}</label>
