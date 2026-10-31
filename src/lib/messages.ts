@@ -12,7 +12,8 @@ type MsgKey =
   | "notReady"
   | "noArtifact"
   | "missingParams"
-  | "badAppId";
+  | "badAppId"
+  | "badIcon";
 
 const messages: Record<"en" | "it", Record<MsgKey, string>> = {
   en: {
@@ -32,6 +33,7 @@ const messages: Record<"en" | "it", Record<MsgKey, string>> = {
     missingParams: "Missing parameters.",
     badAppId:
       "Invalid Package ID. Use at least two parts with letters, digits or underscore (e.g. com.yourname.myapp).",
+    badIcon: "The icon is not a valid PNG/JPG/WEBP image (max 4MB). Try uploading it again.",
   },
   it: {
     needInput: "Inserisci un URL oppure carica uno ZIP.",
@@ -50,6 +52,7 @@ const messages: Record<"en" | "it", Record<MsgKey, string>> = {
     missingParams: "Parametri mancanti.",
     badAppId:
       "Package ID non valido. Usa almeno due parti con lettere, numeri o underscore (es. com.tuonome.miaapp).",
+    badIcon: "L\'icona non è un'immagine PNG/JPG/WEBP valida (max 4MB). Ricaricala.",
   },
 };
 
