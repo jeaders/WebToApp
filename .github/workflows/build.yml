@@ -36,6 +36,10 @@ on:
         description: "User-Agent aggiunto alla WebView (vuoto = WebToApp/<versione>)"
         required: false
         default: ""
+      app_icon:
+        description: "Path nel repo di un'immagine per l'icona dell'app (opzionale, es. builds/icon.png)"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -52,6 +56,7 @@ jobs:
       APP_VERSION: ${{ inputs.app_version }}
       APP_BUILD: ${{ inputs.app_build }}
       APP_USER_AGENT: ${{ inputs.app_user_agent }}
+      APP_ICON: ${{ inputs.app_icon }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -104,12 +109,22 @@ jobs:
               const fs = require("fs");
               const path = require("path");
               const zip = new AdmZip(process.env.SITE_ZIP);
-              const entries = zip.getEntries().filter(e => !e.isDirectory);
-              // trova index.html più superficiale
-              const idx = entries
-                .filter(e => /(^|\/)index\.html$/i.test(e.entryName))
-                .sort((a, b) => a.entryName.split("/").length - b.entryName.split("/").length)[0];
-              let base = idx ? idx.entryName.replace(/(^|\/)index\.html$/i, "") : "";
+              const entries = zip.getEntries().filter(e => !e.isDirectory).filter(e => {
+                const p = String(e.entryName).replace(/\\/g, "/");
+                return p.length > 0 && !p.startsWith("__MACOSX/") && !p.split("/").pop().startsWith(".");
+              });
+              const depth = p => p.split("/").length;
+              const htmls = entries
+                .filter(e => /\.html?$/i.test(e.entryName))
+                .sort((a, b) => depth(a.entryName) - depth(b.entryName) || a.entryName.localeCompare(b.entryName));
+              let entry = htmls.find(e => /(^|\/)index\.html?$/i.test(e.entryName)) || (htmls.length === 1 ? htmls[0] : null);
+              if (!entry) {
+                console.error("Nessun index.html nello ZIP" +
+                  (htmls.length ? " e piu di un file HTML senza indice (es. " + htmls.slice(0, 8).map(e => e.entryName).join(", ") + ")" : " — nello ZIP non c\u2019e nemmeno un file HTML") +
+                  ". Rinomina la pagina principale in index.html.");
+                process.exit(1);
+              }
+              let base = entry.entryName.slice(0, entry.entryName.length - path.posix.basename(entry.entryName).length);
               let count = 0;
               for (const e of entries) {
                 let rel = e.entryName;
@@ -121,8 +136,11 @@ jobs:
                 count++;
               }
               if (!fs.existsSync("www/index.html")) {
-                console.error("Nessun index.html trovato nello ZIP.");
-                process.exit(1);
+                // Il punto d\u2019ingresso non si chiama index.html (es. ccgen.html): lo duplichiamo
+                // cos\u00ec Capacitor serve l\u2019app dal file giusto senza toccare i link interni.
+                fs.mkdirSync("www", { recursive: true });
+                fs.writeFileSync(path.join("www", "index.html"), entry.getData());
+                console.log("Creato www/index.html da =", entry.entryName);
               }
               console.log("Estratti " + count + " file in www/ (base=\"" + base + "\")");
             '
@@ -213,8 +231,25 @@ jobs:
             console.log("Manifest aggiornato: hardwareAccelerated + largeHeap + INTERNET.");
           '
 
+      - name: Apply custom app icon
+        run: |
+          if [ -n "$APP_ICON" ]; then
+            if [ -f "$APP_ICON" ]; then
+              mkdir -p assets
+              if node -e 'const b=require("fs").readFileSync(process.argv[1]);process.exit(b.slice(0,8).toString("hex")==="89504e470d0a1a0a"?0:1)' "$APP_ICON"; then
+                cp "$APP_ICON" assets/icon.png
+                echo "Icona personalizzata applicata: $APP_ICON ($(wc -c < "$APP_ICON") byte)."
+              else
+                echo "::warning::$APP_ICON non e un PNG valido: uso l'icona predefinita."
+              fi
+            else
+              echo "::warning::$APP_ICON non esiste nel repo: uso l'icona predefinita."
+            fi
+          fi
+
       - name: Generate icons & splash (@capacitor/assets)
         run: |
+          ls -la assets 2>/dev/null || true
           if [ -f assets/icon.png ]; then
             npm install --no-save @capacitor/assets@latest >/dev/null 2>&1 || true
             npx @capacitor/assets generate --android || echo "assets generate non riuscito: mantengo le icone di default"
