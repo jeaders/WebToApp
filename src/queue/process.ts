@@ -1,8 +1,6 @@
 import { octo, serverConfig, recentRunStats, dispatchWorkflow } from '@/lib/github';
 import { enqueue, dequeue, getAllPending, countPending, remove } from './store';
 import { QueueEntry } from './types';
-import * as fs from 'fs';
-import * as path from 'path';
 
 const MAX_CHECKS = 5;
 
