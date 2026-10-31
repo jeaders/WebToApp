@@ -416,6 +416,7 @@ export default function Dashboard() {
       if (!response.ok) throw new Error(data.error || t('log.sendErr'));
 
       const branch = data.branch || 'main';
+      const headSha = data.headSha || '';
       addLog(t('log.started'));
       setCloudBuildStatus('building');
 
@@ -423,7 +424,7 @@ export default function Dashboard() {
         const r = await fetch('/api/cloud-latest', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...auth, branch, lang }),
+          body: JSON.stringify({ ...auth, branch, headSha, lang }),
         });
         return r.json().catch(() => ({}));
       };
@@ -433,6 +434,8 @@ export default function Dashboard() {
         await new Promise((r) => setTimeout(r, 8000));
         const l = await latest();
         if (!l.runId) continue;
+        // Con la run fissata al commit, l'abbinamento avviene tramite headSha e l'ora di inizio: riusciamo a tracciare solo la nostra build anche nel caso in cui altri utenti abbiano avviato build contemporaneamente.
+        if (headSha && l.headSha && l.headSha !== headSha) continue;
         if (l.createdAt && Date.parse(l.createdAt) < startedMs) continue; // run precedente
         setCloudRunId(l.runId);
         if (l.htmlUrl) setCloudRunUrl(l.htmlUrl);
