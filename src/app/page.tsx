@@ -100,6 +100,8 @@ export default function Dashboard() {
   const [previewUrl, setPreviewUrl] = useState('');
   const [embeddable, setEmbeddable] = useState<boolean | null>(null);
   const [shotFailed, setShotFailed] = useState(false);
+  const [zipPreviewUrl, setZipPreviewUrl] = useState<string | null>(null);
+  const [zipPreviewNote, setZipPreviewNote] = useState<string | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [qrOpen, setQrOpen] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
@@ -179,6 +181,111 @@ export default function Dashboard() {
       alive = false;
     };
   }, [previewUrl]);
+
+  // Anteprima reale dell'archivio ZIP: apriamo il pacchetto con JSZip, individuiamo
+  // l'HTML d'ingresso e riscriviamo i riferimenti agli asset come blob URL, così il
+  // telefono mostra il sito anche per gli upload (senza aspettare la build).
+  useEffect(() => {
+    let alive = true;
+    const blobs: string[] = [];
+    const revoke = () => {
+      while (blobs.length) {
+        try { URL.revokeObjectURL(blobs.pop() as string); } catch { /* ignora */ }
+      }
+    };
+    if (!selectedFile) {
+      revoke();
+      setZipPreviewUrl(null);
+      setZipPreviewNote(null);
+      return () => { alive = false; };
+    }
+    (async () => {
+      try {
+        const JSZip = (await import('jszip')).default;
+        type Entry = { name: string; dir: boolean; async: (kind: 'string' | 'arraybuffer') => Promise<any> };
+        const zip = await JSZip.loadAsync(selectedFile);
+        const files = (Object.values(zip.files) as Entry[]).filter(
+          (f) => !f.dir && !f.name.startsWith('__MACOSX/') && !(f.name.split('/').pop()?.startsWith('.') ?? false)
+        );
+        const byDepth = (a: Entry, b: Entry) =>
+          a.name.split('/').length - b.name.split('/').length || a.name.localeCompare(b.name);
+        const htmls = files.filter((f) => /\.html?$/i.test(f.name)).sort(byDepth);
+        const entry = htmls.find((f) => /(^|\/)index\.html?$/i.test(f.name)) || (htmls.length === 1 ? htmls[0] : null);
+        if (!entry) {
+          if (alive) {
+            setZipPreviewUrl(null);
+            setZipPreviewNote(t('src.zipNoEntry'));
+          }
+          return;
+        }
+        let html = await entry.async('string');
+        let note = '';
+
+        // Riscrivo i riferimenti locali (src/href/url()) come blob URL. L'anteprima è
+        // approssimativa per i file esterni particolari: nell'app l'intero archivio
+        // viene incluso e lì funziona tutto, anche gli asset multi-livello.
+        const MIME: Record<string, string> = {
+          png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
+          svg: 'image/svg+xml', webp: 'image/webp', ico: 'image/x-icon',
+          css: 'text/css', js: 'text/javascript', mjs: 'text/javascript',
+          json: 'application/json', woff: 'font/woff', woff2: 'font/woff2',
+          ttf: 'font/ttf', otf: 'font/otf', mp4: 'video/mp4', webm: 'video/webm',
+        };
+        const map = new Map<string, string>();
+        if (files.length <= 80) {
+          for (const f of files) {
+            if (f === entry || /\.html?$/i.test(f.name)) continue;
+            const ext = f.name.split('/').pop()?.split('.').pop()?.toLowerCase() ?? '';
+            const mime = MIME[ext];
+            if (!mime) continue;
+            try {
+              const u = URL.createObjectURL(new Blob([await f.async('arraybuffer')], { type: mime }));
+              blobs.push(u);
+              const base = f.name.split('/').pop() as string;
+              if (!map.has(base)) map.set(base, u);
+            } catch { /* asset ignorato */ }
+          }
+        }
+        const rewrite = (val: string): string | null => {
+          const path = val.split(/([?#])/)[0];
+          if (!path || /^[a-zA-Z][\w+.-]*:/.test(path) || path.startsWith('//') || path.startsWith('#') || !path.includes('.')) return null;
+          const candidates = [path, path.replace(/^\.\//, ''), path.replace(/^\.\.\//, ''), path.split('/').pop() ?? ''];
+          for (const c of candidates) {
+            if (c && map.has(c)) return (map.get(c) as string) + val.slice(path.length);
+          }
+          return null;
+        };
+        if (map.size) {
+          html = html.replace(/(["'])([^"']*)\1/g, (match: string, quote: string, val: string) => {
+            const next = rewrite(val);
+            return next === null ? match : quote + next + quote;
+          });
+          html = html.replace(/url\(\s*(['"]?)([^'")]+?)['"]?\s*\)/gi, (match: string, quote2: string, val: string) => {
+            const next = rewrite(val);
+            return next === null ? match : `url(${quote2}${next}${quote2})`;
+          });
+        }
+        if (map.size) {
+          note = t('src.zipPreviewNote') as string;
+        }
+
+        const url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+        blobs.push(url);
+        if (!alive) return;
+        setZipPreviewUrl(url);
+        setZipPreviewNote(note || null);
+      } catch {
+        if (!alive) return;
+        setZipPreviewUrl(null);
+        setZipPreviewNote(t('src.zipNoEntry') as string);
+      }
+    })();
+    return () => {
+      alive = false;
+      setTimeout(revoke, 1000);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedFile]);
 
   const screenshotSrc = previewUrl
     ? `https://image.thum.io/get/width/600/crop/1100/noanimate/${previewUrl}`
@@ -298,6 +405,8 @@ export default function Dashboard() {
       if (auth.token) fd.append('token', auth.token);
       if (auth.repo) fd.append('repo', auth.repo);
       if (selectedFile) fd.append('file', selectedFile);
+      // Icona scelta o generata: senza questo campo le build usano l'icona di default
+      if (appIcon) fd.append('appIcon', appIcon);
 
       const response = await fetch('/api/github-build', {
         method: 'POST',
@@ -445,6 +554,7 @@ export default function Dashboard() {
       formData.append('primaryColor', primaryColor);
       formData.append('lang', lang);
       if (selectedFile) formData.append('file', selectedFile);
+      if (appIcon) formData.append('appIcon', appIcon);
 
       addLog(t('log.sending2'));
 
@@ -747,13 +857,22 @@ export default function Dashboard() {
                       {previewUrl ? (
                         renderSite('w-full h-full border-none scale-[0.9] origin-top')
                       ) : selectedFile ? (
-                        <div className="text-center p-4">
-                          <Upload className="mx-auto mb-2 text-blue-200" size={40} />
-                          <p className="text-xs text-blue-400 font-medium">
-                            {t('src.zipReady')} {selectedFile.name}
-                          </p>
-                          <p className="text-xs text-gray-400">{t('src.zipBuildHint')}</p>
-                        </div>
+                        zipPreviewUrl ? (
+                          <iframe
+                            src={zipPreviewUrl}
+                            title={t('src.zipReady') as string}
+                            className="w-full h-full border-none"
+                            sandbox="allow-scripts allow-same-origin allow-forms allow-modals"
+                          />
+                        ) : (
+                          <div className="text-center p-4">
+                            <Upload className="mx-auto mb-2 text-blue-200" size={40} />
+                            <p className="text-xs text-blue-400 font-medium">
+                              {t('src.zipReady')} {selectedFile.name}
+                            </p>
+                            <p className="text-xs text-gray-400">{zipPreviewNote ?? t('src.zipBuildHint')}</p>
+                          </div>
+                        )
                       ) : (
                         <div className="text-center p-4">
                           <Globe className="mx-auto mb-2 text-blue-200" size={40} />
