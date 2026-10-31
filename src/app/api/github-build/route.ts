@@ -99,6 +99,7 @@ export async function POST(req: NextRequest) {
     let appVersion = '';
     let appBuild = '';
     let appUserAgent = '';
+    let appIcon = '';
 
     if (ct.includes('multipart/form-data')) {
       const fd = await req.formData();
@@ -112,6 +113,7 @@ export async function POST(req: NextRequest) {
       appVersion = String(fd.get('appVersion') || '');
       appBuild = String(fd.get('appBuild') || '');
       appUserAgent = String(fd.get('appUserAgent') || '');
+      appIcon = String(fd.get('appIcon') || '');
       const f = fd.get('file');
       if (f && typeof f === 'object' && 'arrayBuffer' in (f as any)) file = f as File;
     } else {
@@ -126,6 +128,7 @@ export async function POST(req: NextRequest) {
       appVersion = body.appVersion || '';
       appBuild = body.appBuild || '';
       appUserAgent = body.appUserAgent || '';
+      appIcon = body.appIcon || '';
     }
 
     // Valori di default per versione / build number / user agent.
@@ -178,6 +181,31 @@ export async function POST(req: NextRequest) {
       // se il controllo statistiche fallisce, proseguiamo comunque
     }
 
+    // Icona personalizzata: il dashboard la invia come data URL. La validiamo e la
+    // commettiamo perché il workflow la usi rimpiattando assets/icon.png di questo run.
+    let iconPath: string = '';
+    if (appIcon) {
+      const m = /data:(image\/(?:png|jpeg|jpg|webp));base64,([A-Za-z0-9+/=]+)/.exec(appIcon);
+      const bytes = m ? Buffer.from(m[2], 'base64') : null;
+      const isPng = !!bytes && bytes.subarray(0, 8).toString('hex') === '89504e470d0a1a0a';
+      const isJpeg = !!bytes && bytes[0] === 0xff && bytes[1] === 0xd8;
+      const isWebp = !!bytes && bytes.length > 12 && bytes.subarray(8, 12).toString('ascii') === 'WEBP';
+      if (!bytes || bytes.length < 100 || bytes.length > 4 * 1024 * 1024 || (!isPng && !isJpeg && !isWebp)) {
+        return NextResponse.json({ error: msg(lang, 'badIcon') }, { status: 400 });
+      }
+      const ext = isPng ? 'png' : isJpeg ? 'jpg' : 'webp';
+      iconPath = `builds/app.icon.${ext}`;
+      await commitFile(
+        octokit,
+        owner,
+        repoName,
+        branch,
+        iconPath,
+        bytes.toString('base64'),
+        `WebToApp: app icon ${appId}`.trim()
+      );
+    }
+
     if (file) {
       // --- Modalità ZIP: commetto lo zip sul branch attuale e compilo da lì ---
       if (file.size > 45 * 1024 * 1024) {
@@ -204,6 +232,7 @@ export async function POST(req: NextRequest) {
         app_version: appVersion,
         app_build: appBuild,
         app_user_agent: appUserAgent,
+        app_icon: iconPath,
       });
       // Rispondiamo subito: su ambienti serverless (Netlify) le funzioni hanno
       // un timeout breve. Lo stato viene recuperato da /api/cloud-latest.
@@ -226,6 +255,7 @@ export async function POST(req: NextRequest) {
       app_version: appVersion,
       app_build: appBuild,
       app_user_agent: appUserAgent,
+      app_icon: iconPath,
     });
     return NextResponse.json({
       success: true,
