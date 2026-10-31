@@ -50,6 +50,8 @@ export const translations: Record<Lang, Record<string, string>> = {
     "src.generating": "Generating bundle...",
     "src.zipReady": "ZIP loaded:",
     "src.zipBuildHint": "Start the build to generate the APK",
+    "src.zipNoEntry": "No HTML page in the ZIP: rename the main page to index.html.",
+    "src.zipPreviewNote": "Local preview from the packaged HTML: some external assets may not show, the app will include the full archive.",
 
     "preview.iphone": "iPhone",
     "preview.android": "Android",
@@ -186,6 +188,8 @@ export const translations: Record<Lang, Record<string, string>> = {
     "src.generating": "Generazione bundle in corso...",
     "src.zipReady": "ZIP caricato:",
     "src.zipBuildHint": "Avvia la build per generare l'APK",
+    "src.zipNoEntry": "Nessuna pagina HTML nello ZIP: rinomina la pagina principale in index.html.",
+    "src.zipPreviewNote": "Anteprima locale dall'HTML dello ZIP: alcuni asset esterni potrebbero non comparire, l'app conterrà l'archivio completo.",
 
     "preview.iphone": "iPhone",
     "preview.android": "Android",
