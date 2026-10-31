@@ -13,8 +13,35 @@ export const runtime = 'nodejs';
 
 const WORKFLOW_ID = 'build.yml';
 
+// Contents API: due utenti che committano lo stesso file nello stesso istante
+// fanno fallire il PUT con un 409. Un singolo retry ricalcando lo sha corrente
+// recupera quasi tutti questi casi senza bloccare l'utente.
+async function commitFileWithRetry(
+  octokit: ReturnType<typeof octo>,
+  owner: string,
+  repo: string,
+  branch: string,
+  path: string,
+  contentBase64: string,
+  message: string
+): Promise<string | undefined> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return (await commitFile(octokit, owner, repo, branch, path, contentBase64, message)) || undefined;
+    } catch (e: any) {
+      const status = e?.status ?? e?.response?.status;
+      if ((status === 409 || status === 422) && attempt < 2) {
+        await new Promise((r) => setTimeout(r, 500 + attempt * 500));
+        continue;
+      }
+      throw e;
+    }
+  }
+  return undefined;
+}
+
 // Limiti anti-abuso (proteggono la quota GitHub Actions del proprietario).
-const MAX_ACTIVE_RUNS = 2; // build in corso contemporaneamente
+const MAX_ACTIVE_RUNS = 4; // build in corso contemporaneamente
 const MAX_RUNS_PER_HOUR = 40; // build avviate nell'ultima ora (tutti i visitatori)
 
 /* ------------------------------------------------------------------ */
@@ -183,7 +210,10 @@ export async function POST(req: NextRequest) {
 
     // Icona personalizzata: il dashboard la invia come data URL. La validiamo e la
     // commettiamo perché il workflow la usi rimpiattando assets/icon.png di questo run.
+    // headSha viene fissato all'ultimo commit così la run compilera ESATTAMENTE
+    // i file che abbiamo committato, anche se un altro utente li sovrascrive dopo.
     let iconPath: string = '';
+    let headSha: string = '';
     if (appIcon) {
       const m = /data:(image\/(?:png|jpeg|jpg|webp));base64,([A-Za-z0-9+/=]+)/.exec(appIcon);
       const bytes = m ? Buffer.from(m[2], 'base64') : null;
@@ -195,7 +225,7 @@ export async function POST(req: NextRequest) {
       }
       const ext = isPng ? 'png' : isJpeg ? 'jpg' : 'webp';
       iconPath = `builds/app.icon.${ext}`;
-      await commitFile(
+      const iconCommit = await commitFileWithRetry(
         octokit,
         owner,
         repoName,
@@ -204,6 +234,7 @@ export async function POST(req: NextRequest) {
         bytes.toString('base64'),
         `WebToApp: app icon ${appId}`.trim()
       );
+      if (iconCommit) headSha = iconCommit;
     }
 
     if (file) {
@@ -215,7 +246,7 @@ export async function POST(req: NextRequest) {
       const base64 = bytes.toString('base64');
       const zipPath = 'builds/site.zip';
 
-      await commitFile(
+      const zipCommit = await commitFileWithRetry(
         octokit,
         owner,
         repoName,
@@ -224,7 +255,8 @@ export async function POST(req: NextRequest) {
         base64,
         `WebToApp: upload site ${appId || ''}`.trim()
       );
-      await dispatchWorkflow(octokit, owner, repoName, WORKFLOW_ID, branch, {
+      if (zipCommit) headSha = zipCommit;
+      await dispatchWorkflow(octokit, owner, repoName, WORKFLOW_ID, headSha || branch, {
         app_name: appName,
         app_id: appId,
         web_url: url,
@@ -241,13 +273,14 @@ export async function POST(req: NextRequest) {
         mode: 'zip',
         appId,
         branch,
+        headSha,
         repo: `${owner}/${repoName}`,
         message: 'Build avviata dal tuo ZIP.',
       });
     }
 
     // --- Modalità URL ---
-    await dispatchWorkflow(octokit, owner, repoName, WORKFLOW_ID, branch, {
+    await dispatchWorkflow(octokit, owner, repoName, WORKFLOW_ID, headSha || branch, {
       app_name: appName,
       app_id: appId,
       web_url: url,
@@ -262,6 +295,7 @@ export async function POST(req: NextRequest) {
       mode: 'url',
       appId,
       branch,
+      headSha,
       repo: `${owner}/${repoName}`,
       message: 'Build avviata.',
     });
