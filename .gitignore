@@ -1,0 +1,69 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# local env files
+.env*.local
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# app specific
+/temp_builds
+/temp_uploads
+/public/downloads/*.zip
+
+# local env files / secrets (mai committare token o segreti)
+.env
+.env.*
+!.env.example
+*.secret
+secrets.json
+
+# private local notes / secrets — MAI pubblici
+*.local.md
+_private*
+PRIVATE*
+private.local.*
+
+# Android signing keystore — MAI pubblico
+*.local.jks
+android-keystore.local.jks
+*.keystore
+*.jks
+
+# Capacitor / build generati (creati a runtime dal workflow, per-build e per-utente)
+/android
+/ios
+/www
+/builds
+/apk
+/capacitor.config.json
+/capacitor.config.ts
+/capacitor.config.js
+/capacitor.config.mjs
+/android/app/src/main/assets/public

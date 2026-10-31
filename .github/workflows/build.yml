@@ -1,0 +1,337 @@
+name: Build Mobile Apps
+run-name: webtoapp-${{ inputs.build_token }}
+
+# Workflow che trasforma un sito in un APK Android usando Capacitor.
+# Due modalità (una delle due, gestita dagli input):
+#   - URL  : carica il sito remoto nella WebView nativa (server.url)
+#   - ZIP  : estrae builds/site.zip in www e costruisce un'app statica locale
+# Viene avviato manualmente (UI) o via API dalla dashboard WebToApp.
+on:
+  workflow_dispatch:
+    inputs:
+      app_name:
+        description: "Nome dell'App"
+        required: true
+        default: "WebToApp"
+      app_id:
+        description: "Package ID (es. com.example.app)"
+        required: true
+        default: "com.webtoapp.starter"
+      web_url:
+        description: "URL del sito da caricare nell'app (modalità URL)"
+        required: false
+        default: ""
+      site_zip:
+        description: "Path nello repo di uno ZIP da impacchettare (modalità ZIP, es. builds/site.zip)"
+        required: false
+        default: ""
+      app_version:
+        description: "Versione app / versionName (es. 0.1 oppure 1.2.3)"
+        required: false
+        default: "0.1"
+      app_build:
+        description: "Build number / versionCode (numero intero)"
+        required: false
+        default: "1"
+      app_user_agent:
+        description: "User-Agent aggiunto alla WebView (vuoto = WebToApp/<versione>)"
+        required: false
+        default: ""
+      app_icon:
+        description: "Path nel repo di un'immagine per l'icona dell'app (opzionale, es. builds/icon.png)"
+        required: false
+        default: ""
+      build_token:
+        description: "Token univoco della build (usato nel run-name per tracciare la run giusta)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-24.04
+    env:
+      APP_NAME: ${{ inputs.app_name }}
+      APP_ID: ${{ inputs.app_id }}
+      WEB_URL: ${{ inputs.web_url }}
+      SITE_ZIP: ${{ inputs.site_zip }}
+      APP_VERSION: ${{ inputs.app_version }}
+      APP_BUILD: ${{ inputs.app_build }}
+      APP_USER_AGENT: ${{ inputs.app_user_agent }}
+      APP_ICON: ${{ inputs.app_icon }}
+      BUILD_TOKEN: ${{ inputs.build_token }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Validate inputs
+        run: |
+          if [ -z "$WEB_URL" ] && [ -z "$SITE_ZIP" ]; then
+            echo "::error::Fornisci web_url (modalità URL) oppure site_zip (modalità ZIP)."
+            exit 1
+          fi
+          echo "App: $APP_NAME ($APP_ID)"
+          # Il package ID identifica l'app sul dispositivo: se resta un segnaposto,
+          # la nuova app verrebbe installata come aggiornamento della precedente.
+          case "$APP_ID" in
+            com.yourname.app|com.tuonome.app|com.webtoapp.app|com.webtoapp.starter|com.example.app)
+              echo "::error::Package ID segnaposto ($APP_ID). Usa un ID tuo, es. com.tuonome.miaapp: con un ID condiviso la nuova app sostituisce quella già installata."
+              exit 1
+              ;;
+          esac
+          if ! printf '%s' "$APP_ID" | grep -qE '^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$'; then
+            echo "::error::Package ID non valido: $APP_ID (es. com.tuonome.miaapp)"
+            exit 1
+          fi
+          echo "Package ID valido: $APP_ID"
+          if [ -n "$SITE_ZIP" ]; then echo "Modalità: ZIP -> $SITE_ZIP"; else echo "Modalità: URL -> $WEB_URL"; fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Use latest Capacitor 8.x (compatibilità Android moderna)
+        run: |
+          # La lock blocca Capacitor 8.1.0 che crasha su Android 15/16 recenti.
+          # Forziamo l'ultima 8.x (validata) senza alterare i file del repo.
+          npm install --no-save @capacitor/core@8.5.3 @capacitor/cli@8.5.3 @capacitor/android@8.5.3
+          npx cap --version
+
+      - name: Prepare web assets
+        run: |
+          set -e
+          rm -rf www && mkdir -p www
+          if [ -n "$SITE_ZIP" ]; then
+            echo "Estraggo $SITE_ZIP in www/ (con appiattimento cartella radice)..."
+            SITE_ZIP="$SITE_ZIP" node -e '
+              const AdmZip = require("adm-zip");
+              const fs = require("fs");
+              const path = require("path");
+              const zip = new AdmZip(process.env.SITE_ZIP);
+              const entries = zip.getEntries().filter(e => !e.isDirectory).filter(e => {
+                const p = String(e.entryName).replace(/\\/g, "/");
+                return p.length > 0 && !p.startsWith("__MACOSX/") && !p.split("/").pop().startsWith(".");
+              });
+              const depth = p => p.split("/").length;
+              const htmls = entries
+                .filter(e => /\.html?$/i.test(e.entryName))
+                .sort((a, b) => depth(a.entryName) - depth(b.entryName) || a.entryName.localeCompare(b.entryName));
+              let entry = htmls.find(e => /(^|\/)index\.html?$/i.test(e.entryName)) || (htmls.length === 1 ? htmls[0] : null);
+              if (!entry) {
+                console.error("Nessun index.html nello ZIP" +
+                  (htmls.length ? " e piu di un file HTML senza indice (es. " + htmls.slice(0, 8).map(e => e.entryName).join(", ") + ")" : " — nello ZIP non c\u2019e nemmeno un file HTML") +
+                  ". Rinomina la pagina principale in index.html.");
+                process.exit(1);
+              }
+              let base = entry.entryName.slice(0, entry.entryName.length - path.posix.basename(entry.entryName).length);
+              let count = 0;
+              for (const e of entries) {
+                let rel = e.entryName;
+                if (base && rel.startsWith(base)) rel = rel.slice(base.length).replace(/^\//, "");
+                if (!rel || rel.includes("..")) continue;
+                const out = path.join("www", rel);
+                fs.mkdirSync(path.dirname(out), { recursive: true });
+                fs.writeFileSync(out, e.getData());
+                count++;
+              }
+              if (!fs.existsSync("www/index.html")) {
+                // Il punto d\u2019ingresso non si chiama index.html (es. ccgen.html): lo duplichiamo
+                // cos\u00ec Capacitor serve l\u2019app dal file giusto senza toccare i link interni.
+                fs.mkdirSync("www", { recursive: true });
+                fs.writeFileSync(path.join("www", "index.html"), entry.getData());
+                console.log("Creato www/index.html da =", entry.entryName);
+              }
+              console.log("Estratti " + count + " file in www/ (base=\"" + base + "\")");
+            '
+          else
+            printf '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>Loading…</title><style>html,body{margin:0;padding:0;height:100%%;background:#000;color:#fff;display:flex;align-items:center;justify-content:center;font-family:-apple-system,Roboto,sans-serif}</style></head><body>Loading…</body></html>' > www/index.html
+          fi
+
+      - name: Initialize Capacitor project
+        run: npx cap init "$APP_NAME" "$APP_ID" --web-dir www
+
+      - name: Configure Capacitor
+        run: |
+          set -e
+          # In un progetto TypeScript "cap init" crea capacitor.config.ts: rimuoviamolo
+          # e scriviamo un capacitor.config.json canonico così il config sia sempre letto.
+          rm -f capacitor.config.ts capacitor.config.js capacitor.config.mjs
+          node -e '
+            const fs = require("fs");
+            const p = "./capacitor.config.json";
+            const cfg = {
+              appId: process.env.APP_ID,
+              appName: process.env.APP_NAME,
+              webDir: "www",
+              bundledWebRuntime: false,
+            };
+            if (process.env.SITE_ZIP && process.env.SITE_ZIP.length > 0) {
+              // Modalità ZIP: app statica locale, gli asset sono in www/
+            } else {
+              // Modalità URL: normalizza lo schema (es. "sito.it" -> "https://sito.it")
+              let webUrl = (process.env.WEB_URL || "").trim();
+              if (webUrl && !/^https?:\/\//i.test(webUrl)) webUrl = "https://" + webUrl;
+              if (!webUrl) { console.error("WEB_URL vuoto in modalità URL."); process.exit(1); }
+              console.log("URL normalizzato:", webUrl);
+              // Carica il sito remoto direttamente nella WebView nativa
+              cfg.server = { url: webUrl, cleartext: true, androidScheme: "https", allowNavigation: ["*"] };
+            }
+            cfg.plugins = {
+              SplashScreen: {
+                launchShowDuration: 1200,
+                backgroundColor: "#000000",
+                androidScaleType: "CENTER_CROP",
+                showSpinner: true,
+                spinnerColor: "#ffffff",
+              },
+            };
+            fs.writeFileSync(p, JSON.stringify(cfg, null, 2));
+            console.log("capacitor.config.json configurato:");
+            console.log(fs.readFileSync(p, "utf8"));
+          '
+
+      - name: Add Android platform and sync
+        run: |
+          npx cap add android
+          npx cap sync android
+
+      - name: Set app version, build number and User-Agent
+        run: node .github/scripts/customize-android.js
+
+      - name: Verify runtime config in native assets
+        run: |
+          node -e '
+            const fs = require("fs");
+            const p = "android/app/src/main/assets/capacitor.config.json";
+            if (!fs.existsSync(p)) { console.error("Config nativa mancante: " + p); process.exit(1); }
+            const cfg = JSON.parse(fs.readFileSync(p, "utf8"));
+            const hasServer = !!(cfg.server && cfg.server.url);
+            if (!process.env.SITE_ZIP && !hasServer) {
+              console.error("ERRORE: server.url assente nella config nativa. L applicazione mostrerebbe solo Loading.");
+              process.exit(1);
+            }
+            console.log("Config nativa OK -> modalita " + (process.env.SITE_ZIP ? "bundled (zip)" : ("server.url=" + cfg.server.url)));
+          '
+
+      - name: Harden native app (WebView / giochi)
+        run: |
+          node -e '
+            const fs = require("fs");
+            const p = "android/app/src/main/AndroidManifest.xml";
+            if (!fs.existsSync(p)) { console.log("manifest non trovato, skip"); process.exit(0); }
+            let s = fs.readFileSync(p, "utf8");
+            if (!/android.permission.INTERNET/.test(s)) {
+              s = s.replace(/<application\b/, "<uses-permission android:name=\"android.permission.INTERNET\" />\n    <application");
+            }
+            if (/<application\b/.test(s) && !/android:hardwareAccelerated/.test(s)) {
+              s = s.replace(/<application\b/, "<application android:hardwareAccelerated=\"true\" android:largeHeap=\"true\"");
+            }
+            fs.writeFileSync(p, s);
+            console.log("Manifest aggiornato: hardwareAccelerated + largeHeap + INTERNET.");
+          '
+
+      - name: Apply custom app icon
+        run: |
+          if [ -n "$APP_ICON" ]; then
+            if [ -f "$APP_ICON" ]; then
+              mkdir -p assets
+              if node -e 'const b=require("fs").readFileSync(process.argv[1]);process.exit(b.slice(0,8).toString("hex")==="89504e470d0a1a0a"?0:1)' "$APP_ICON"; then
+                cp "$APP_ICON" assets/icon.png
+                echo "Icona personalizzata applicata: $APP_ICON ($(wc -c < "$APP_ICON") byte)."
+              else
+                echo "::warning::$APP_ICON non e un PNG valido: uso l'icona predefinita."
+              fi
+            else
+              echo "::warning::$APP_ICON non esiste nel repo: uso l'icona predefinita."
+            fi
+          fi
+
+      - name: Generate icons & splash (@capacitor/assets)
+        run: |
+          ls -la assets 2>/dev/null || true
+          if [ -f assets/icon.png ]; then
+            npm install --no-save @capacitor/assets@latest >/dev/null 2>&1 || true
+            npx @capacitor/assets generate --android || echo "assets generate non riuscito: mantengo le icone di default"
+          else
+            echo "Nessuna assets/icon.png: mantengo le icone di default."
+          fi
+
+      - name: Setup Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Setup Android SDK (licenses + platform + build-tools)
+        run: |
+          set -e
+          SM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SM" ]; then SM="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"; fi
+          echo "sdkmanager: $SM"
+          yes | "$SM" --licenses > /dev/null 2>&1 || true
+          CSDK="$(grep -E 'compileSdkVersion' android/variables.gradle | grep -oE '[0-9]+' | head -1)"
+          CSDK="${CSDK:-36}"
+          echo "Installing platform-tools, platforms;android-${CSDK}, build-tools"
+          "$SM" "platform-tools" "platforms;android-${CSDK}" "build-tools;36.0.0"
+
+      - name: Build APK (signed release if secrets set, else debug)
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -e
+          chmod +x ./gradlew
+          mkdir -p ../apk
+          BT="$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          ZALIGN="$ANDROID_HOME/build-tools/$BT/zipalign"
+          SIGNER="$ANDROID_HOME/build-tools/$BT/apksigner"
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ] && [ -n "$ANDROID_KEY_ALIAS" ] && [ -n "$ANDROID_KEYSTORE_PASSWORD" ]; then
+            echo "Firma release abilitata."
+            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > release.keystore
+            ./gradlew assembleRelease --no-daemon
+            UNSIGNED="$(ls app/build/outputs/apk/release/*-unsigned.apk 2>/dev/null | head -1)"
+            if [ -z "$UNSIGNED" ]; then
+              echo "APK release non trovato: fallback a debug."
+              ./gradlew assembleDebug --no-daemon
+              cp app/build/outputs/apk/debug/app-debug.apk ../apk/app-debug.apk
+            else
+              "$ZALIGN" -f 4 "$UNSIGNED" app-release-aligned.apk
+              "$SIGNER" sign --ks release.keystore --ks-key-alias "$ANDROID_KEY_ALIAS" \
+                --ks-pass "env:ANDROID_KEYSTORE_PASSWORD" --key-pass "env:ANDROID_KEY_PASSWORD" \
+                --out ../apk/app-release.apk app-release-aligned.apk
+              echo "APK release firmato: ../apk/app-release.apk"
+              # AAB firmato per la pubblicazione sul Play Store
+              ./gradlew bundleRelease --no-daemon
+              AAB="$(ls app/build/outputs/bundle/release/*.aab 2>/dev/null | head -1)"
+              if [ -n "$AAB" ]; then
+                "$JAVA_HOME/bin/jarsigner" -keystore release.keystore \
+                  -storepass "$ANDROID_KEYSTORE_PASSWORD" -keypass "$ANDROID_KEY_PASSWORD" \
+                  -sigalg SHA256withRSA -digestalg SHA-256 \
+                  -signedjar ../apk/app-release.aab "$AAB" "$ANDROID_KEY_ALIAS"
+                echo "AAB firmato: ../apk/app-release.aab"
+              fi
+            fi
+            rm -f release.keystore app-release-aligned.apk
+          else
+            echo "Segreti di firma assenti: build di debug (fallback, come prima)."
+            ./gradlew assembleDebug --no-daemon
+            cp app/build/outputs/apk/debug/app-debug.apk ../apk/app-debug.apk
+          fi
+
+      - name: Upload APK / AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-${{ github.run_id }}
+          path: apk/*
+          if-no-files-found: error
+          retention-days: 14

@@ -1,0 +1,93 @@
+name: Build iOS App
+
+# Workflow SEPARATO e OPZIONALE per iOS. Non influenza la build Android.
+# Genera una .app per simulatore (nessuna firma richiesta). Per produrre un
+# .ipa installabile su dispositivo servono un account Apple Developer e i
+# relativi certificati/provisioning (vedi note in fondo).
+on:
+  workflow_dispatch:
+    inputs:
+      app_name:
+        description: "Nome dell'App"
+        required: true
+        default: "WebToApp"
+      app_id:
+        description: "Package ID (es. com.example.app)"
+        required: true
+        default: "com.webtoapp.starter"
+      web_url:
+        description: "URL del sito da caricare nell'app"
+        required: true
+        default: "https://example.com"
+
+permissions:
+  contents: read
+
+jobs:
+  build-ios:
+    name: Build iOS (simulator, unsigned)
+    runs-on: macos-latest
+    env:
+      APP_NAME: ${{ inputs.app_name }}
+      APP_ID: ${{ inputs.app_id }}
+      WEB_URL: ${{ inputs.web_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Initialize Capacitor project
+        run: |
+          mkdir -p www
+          printf '%s\n' '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Loading…</title></head><body>Loading…</body></html>' > www/index.html
+          npx cap init "$APP_NAME" "$APP_ID" --web-dir www
+
+      - name: Configure Capacitor for native app mode
+        run: |
+          node -e '
+            const fs = require("fs");
+            const p = "./capacitor.config.json";
+            const base = { appId: process.env.APP_ID, appName: process.env.APP_NAME, webDir: "www", bundledWebRuntime: false };
+            let cfg = base;
+            if (fs.existsSync(p)) { try { cfg = JSON.parse(fs.readFileSync(p, "utf8")); } catch (e) { cfg = base; } }
+            cfg.appId = process.env.APP_ID;
+            cfg.appName = process.env.APP_NAME;
+            cfg.webDir = cfg.webDir || "www";
+            cfg.server = { url: process.env.WEB_URL, cleartext: true, allowNavigation: ["*"] };
+            cfg.plugins = Object.assign({}, cfg.plugins, { SplashScreen: { launchShowDuration: 1200, backgroundColor: "#000000" } });
+            fs.writeFileSync(p, JSON.stringify(cfg, null, 2));
+            console.log("capacitor.config.json configurato (iOS).");
+          '
+
+      - name: Add iOS platform and sync
+        run: |
+          npx cap add ios
+          npx cap sync ios
+
+      - name: Build for simulator (unsigned)
+        run: |
+          cd ios/App
+          xcodebuild \
+            -workspace App.xcworkspace \
+            -scheme App \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            clean build
+
+      - name: Upload simulator app
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-sim-app-${{ github.run_id }}
+          path: ios/App/build/Build/Products/Debug-iphonesimulator/*.app
+          if-no-files-found: warn
+          retention-days: 14
